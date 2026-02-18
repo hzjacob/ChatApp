@@ -1,0 +1,37 @@
+﻿@page "/not-found"
+@layout MainLayout
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="d-flex flex-column align-center justify-center" Style="height: 70vh;">
+    
+    @* Animated Icon Section *@
+    <div class="bounce-animation">
+        <MudIcon Icon="@Icons.Material.Filled.SearchOff" Color="Color.Error" Style="font-size: 8rem;" />
+    </div>
+
+    <MudText Typo="Typo.h2" Color="Color.Primary" Class="mt-4 fw-bold">404</MudText>
+    
+    <MudText Typo="Typo.h5" Align="Align.Center" Class="mud-text-secondary mb-8">
+        Oops! The page you're looking for has vanished into the digital void.
+    </MudText>
+
+    <MudButton Variant="Variant.Filled" 
+               Color="Color.Primary" 
+               StartIcon="@Icons.Material.Filled.Home" 
+               Size="Size.Large"
+               Href="/">
+        Back to Home
+    </MudButton>
+
+</MudContainer>
+
+<style>
+    .bounce-animation {
+        animation: floating 3s ease-in-out infinite;
+    }
+
+    @@keyframes floating {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-20px); }
+        100% { transform: translateY(0px); }
+    }
+</style>

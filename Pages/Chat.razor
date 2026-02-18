@@ -1,0 +1,95 @@
+@page "/chat"
+@namespace ChatApp.Pages
+@inherits ChatBase
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <MudGrid>
+        @* Left Sidebar - Active Users/Rooms *@
+        <MudPaper Elevation="3" Class="pa-4" Style="height: 80vh; border-radius: 16px;">
+            <MudText Typo="Typo.h6" Class="mb-4">Online Users (@OnlineUsers.Count)</MudText>
+            <MudList T="string">
+                @foreach (var user in OnlineUsers)
+                {
+                    <MudListItem Icon="@Icons.Material.Filled.Circle" 
+                                IconColor="@(user == CurrentUser ? Color.Primary : Color.Success)">
+                        @user @(user == CurrentUser ? "(You)" : "")
+                        
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+
+        @* Right Side - Chat Window *@
+        <MudItem xs="12" sm="9">
+            <MudPaper Elevation="3" Class="d-flex flex-column" Style="height: 80vh; border-radius: 16px; overflow: hidden;">
+                
+                @* Chat Header *@
+                <MudToolBar Dense="true" Class="mud-theme-primary">
+                    <MudIcon Icon="@Icons.Material.Filled.ChatBubble" Class="mr-2" />
+                    <MudText Typo="Typo.h6">Global Lobby</MudText>
+                    <MudSpacer />
+                    <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Color="Color.Inherit" />
+                </MudToolBar>
+
+                @* Message List Area *@
+                <MudCardContent Style="flex-grow: 1; overflow-y: auto;" Class="pa-4 bg-light">
+                        @if (Messages == null || !Messages.Any())
+                        {
+                            <div class="d-flex flex-column align-center justify-center h-100 opacity-50">
+                                <MudIcon Icon="@Icons.Material.Filled.Forum" Style="font-size: 4rem;" />
+                                <MudText Typo="Typo.body1">No messages yet...</MudText>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var msg in Messages)
+                            {
+                                bool isMe = msg.Username == CurrentUser;
+                                <div class="d-flex @(isMe ? "justify-end" : "justify-start") mb-4">
+                                    <div class="d-flex flex-column @(isMe ? "align-end" : "align-start")" style="max-width: 70%;">
+                                        <MudText Typo="Typo.caption" Class="px-2">@msg.Username • @msg.CreatedAt.ToString("HH:mm")</MudText>
+                                        <MudPaper Elevation="1" 
+                                                Class="@(isMe ? "pa-3 mud-theme-primary" : "pa-3 bg-white")" 
+                                                Style="@(isMe ? "border-radius: 15px 15px 0 15px;" : "border-radius: 15px 15px 15px 0;")">
+                                            <MudText Typo="Typo.body1" Style="word-wrap: break-word; overflow-wrap: anywhere;" >@msg.Content</MudText>
+                                        </MudPaper>
+                                    </div>
+                                </div>
+                            }
+                        }
+                        <div id="end-of-messages"></div>
+
+                </MudCardContent>
+
+                @* Sticky Bottom Input *@
+                <MudDivider />
+                <div class="pa-4 bg-white">
+                    <MudTextField @bind-Value="NewMessage"
+                                  Placeholder="@(_isSending ? "Sending..." : "Write a message...")"
+                                  Variant="Variant.Outlined" 
+                                  Adornment="Adornment.End" 
+                                  Immediate="true"
+                                  AdornmentIcon="@Icons.Material.Filled.Send" 
+                                  OnAdornmentClick="SendMessageAsync"
+                                  OnkeyDown="@HandleKeyPress"
+                                  FullWidth="true"
+                                  Margin="Margin.Dense"
+                                  AutoGrow 
+                                  Lines="1"
+                                  MaxLines="5"
+                                  KeyDownPreventDefault = "_shouldPreventDefault"/>
+                </div>
+
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+<script>
+    window.ScrollToBottom = (element) => {
+        if (element) {
+            element.scrollTo({
+                top: element.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+    };
+</script>
