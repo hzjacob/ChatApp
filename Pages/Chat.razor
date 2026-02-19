@@ -32,14 +32,23 @@
 
                 @* Message List Area *@
                 <MudCardContent Style="flex-grow: 1; overflow-y: auto;" Class="pa-4 bg-light">
+                        @if (hasMoreMesssages)
+                        {
+                            <div class="d-flex justify-center mb-4">
+                                <MudButton Variant="Variant.Text" 
+                                            Color="Color.Primary" 
+                                            OnClick="@(() => LoadMessagesAsync(false))">
+                                    View Older Messages
+                                </MudButton>
+                            </div>
+                        }
                         @if (Messages == null || !Messages.Any())
                         {
                             <div class="d-flex flex-column align-center justify-center h-100 opacity-50">
                                 <MudIcon Icon="@Icons.Material.Filled.Forum" Style="font-size: 4rem;" />
                                 <MudText Typo="Typo.body1">No messages yet...</MudText>
                             </div>
-                        }
-                        else
+                        } else
                         {
                             @foreach (var msg in Messages)
                             {

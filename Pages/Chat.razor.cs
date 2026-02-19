@@ -28,7 +28,9 @@ namespace ChatApp.Pages
 
         public bool _shouldPreventDefault = false;
         public bool _isSending = false;
-        
+        protected int messagePageSize = 20;
+        protected int currentOffset = 0;
+        protected bool hasMoreMesssages = false;
 
         protected override async Task OnInitializedAsync()
         {
@@ -43,14 +45,66 @@ namespace ChatApp.Pages
             await SupabaseClient.Realtime.ConnectAsync();
             await LoadMessagesAsync();
             await SetupRealtimeAsync();
-                // Scroll to bottom after initial load
-            await Task.Delay(100); // Small delay to ensure messages are rendered
+                // Scroll to bottom after initial loa
             await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('end-of-messages').scrollIntoView({behavior:'smooth'})");
         }
-        private async Task LoadMessagesAsync()
+        public async Task LoadMessagesAsync(bool isInitialLoad = true)
         {
-            var response = await SupabaseClient.From<Message>().Order("created_at", Ordering.Ascending).Get();
-            Messages = response.Models;
+            if (isInitialLoad)
+            {
+                currentOffset = 0;
+                Messages.Clear();
+            }
+
+            var response = await SupabaseClient
+                .From<Message>()
+                .Order("created_at", Ordering.Descending)
+                .Range(currentOffset, currentOffset + messagePageSize - 1)
+                .Get();
+
+            if (response.Models.Any())
+            {
+                var newMessage = response.Models.OrderBy(x => x.CreatedAt).ToList();
+                
+                if (isInitialLoad)
+                {
+                    Messages = newMessage;
+                    StateHasChanged(); // Let UI render first
+                    
+                    // Traditional scroll to bottom for first load
+                }
+                else
+                {
+                    // --- THE INSTANT PIN LOGIC ---
+                    // Use the class you applied to your MudCardContent
+                    var selector = ".mud-card-content"; 
+
+                    // 1. Save the current distance from the bottom
+                    var scrollInfo = await JSRuntime.InvokeAsync<double>("eval", 
+                        $"var el = document.querySelector('{selector}'); el.scrollHeight - el.scrollTop");
+
+                    // 2. Add the older messages to the top
+                    Messages.InsertRange(0, newMessage);
+                    
+                    // 3. Trigger Blazor render
+                    StateHasChanged();
+
+                    // 4. Restore the position in the next animation frame to prevent "flicker"
+                    await JSRuntime.InvokeVoidAsync("eval", $@"
+                        requestAnimationFrame(() => {{
+                            var el = document.querySelector('{selector}');
+                            el.scrollTop = el.scrollHeight - {scrollInfo};
+                        }});
+                    ");
+                }
+
+                currentOffset += messagePageSize;
+                hasMoreMesssages = response.Models.Count >= messagePageSize;
+            }
+            else
+            {
+                hasMoreMesssages = false;
+            }
             StateHasChanged();
         }
         private async Task SetupRealtimeAsync()
@@ -162,14 +216,6 @@ namespace ChatApp.Pages
             {
                 _shouldPreventDefault = false;
             }
-        }
-
-        public class PresenceUser: BasePresence
-        {
-            [JsonPropertyName("username")]
-            public string Username { get; set; } = string.Empty;
-            [JsonPropertyName("online_at")]
-            public DateTime OnlineAt { get; set; }
         }
     }
 }
