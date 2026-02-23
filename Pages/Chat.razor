@@ -31,8 +31,8 @@
                 </MudToolBar>
 
                 @* Message List Area *@
-                <MudCardContent Style="flex-grow: 1; overflow-y: auto;" Class="pa-4 bg-light">
-                        @if (hasMoreMesssages)
+                <MudCardContent Style="flex-grow: 1; overflow-y: auto;" Class="pa-4 bg-light" id="chat-container">
+                        @if (hasMoreMesssages && _isScrolledToTop)
                         {
                             <div class="d-flex justify-center mb-4">
                                 <MudButton Variant="Variant.Text" 
@@ -85,7 +85,8 @@
                                   AutoGrow 
                                   Lines="1"
                                   MaxLines="5"
-                                  KeyDownPreventDefault = "_shouldPreventDefault"/>
+                                  KeyDownPreventDefault = "_shouldPreventDefault"
+                                  onscroll=""/>
                 </div>
 
             </MudPaper>
@@ -93,7 +94,18 @@
     </MudGrid>
 </MudContainer>
 <script>
-    window.ScrollToBottom = (element) => {
+    window.watchChatScrollById = function (id, dotNetHelper) {
+        var element = document.getElementById(id);
+        if (element) {
+            element.addEventListener('scroll', function () {
+                // Check if scroll is near the top
+                var isAtTop = element.scrollTop < 20;
+                dotNetHelper.invokeMethodAsync('OnChatScroll', isAtTop);
+            });
+        }
+    };
+
+    window.ScrollToBottom = function (element) {
         if (element) {
             element.scrollTo({
                 top: element.scrollHeight,

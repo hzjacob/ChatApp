@@ -31,6 +31,7 @@ namespace ChatApp.Pages
         protected int messagePageSize = 20;
         protected int currentOffset = 0;
         protected bool hasMoreMesssages = false;
+        public bool _isScrolledToTop;
 
         protected override async Task OnInitializedAsync()
         {
@@ -48,8 +49,16 @@ namespace ChatApp.Pages
                 // Scroll to bottom after initial loa
             await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('end-of-messages').scrollIntoView({behavior:'smooth'})");
         }
+        protected override async Task OnAfterRenderAsync(bool firstRender)
+        {
+            if (firstRender)
+            {
+                    await JSRuntime.InvokeVoidAsync("watchChatScrollById", "chat-container", DotNetObjectReference.Create(this));
+            }
+        }
         public async Task LoadMessagesAsync(bool isInitialLoad = true)
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             if (isInitialLoad)
             {
                 currentOffset = 0;
@@ -106,9 +115,12 @@ namespace ChatApp.Pages
                 hasMoreMesssages = false;
             }
             StateHasChanged();
+            sw.Stop();
+            System.Diagnostics.Debug.WriteLine($"loadmessage function timer: {sw.ElapsedMilliseconds} ms");
         }
         private async Task SetupRealtimeAsync()
         {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
             var channel = SupabaseClient.Realtime.Channel("public-messages");
         // 1. Generate a unique key for this session
             var presenceKey = Guid.NewGuid().ToString();
@@ -162,6 +174,8 @@ namespace ChatApp.Pages
                 Username = CurrentUser ?? "Anonymous", 
                 OnlineAt = DateTime.Now 
             });
+            sw.Stop();
+            System.Diagnostics.Debug.WriteLine($"setuprealtime function timer: {sw.ElapsedMilliseconds} ms");
         }
         public async Task SendMessageAsync()
         {
@@ -215,6 +229,17 @@ namespace ChatApp.Pages
             else
             {
                 _shouldPreventDefault = false;
+            }
+        }
+        [JSInvokable] 
+        public void OnChatScroll(bool atTop) 
+        {
+            if (_isScrolledToTop != atTop) 
+            {
+
+                _isScrolledToTop = atTop;
+
+                StateHasChanged(); 
             }
         }
     }
