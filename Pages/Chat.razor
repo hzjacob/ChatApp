@@ -37,8 +37,18 @@
                             <div class="d-flex justify-center mb-4">
                                 <MudButton Variant="Variant.Text" 
                                             Color="Color.Primary" 
-                                            OnClick="@(() => LoadMessagesAsync(false))">
-                                    View Older Messages
+                                            OnClick="@(() => LoadMessagesAsync(false))"
+                                            Disabled = "@_isLoadingOlder"
+                                            StartIcon="@(_isLoadingOlder ? null : Icons.Material.Filled.History)">
+                                        @if(_isLoadingOlder){
+                                            <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                                            <MudText Class="ms-2">Loading...</MudText>
+                                        }
+                                        else
+                                        {
+                                            <MudText>View Older Messages</MudText>
+                                        }
+                                    
                                 </MudButton>
                             </div>
                         }
@@ -65,7 +75,6 @@
                                 </div>
                             }
                         }
-                        <div id="end-of-messages"></div>
 
                 </MudCardContent>
 
@@ -105,7 +114,8 @@
         }
     };
 
-    window.ScrollToBottom = function (element) {
+    window.ScrollToBottom = function (id) {
+        var element = document.getElementById(id);
         if (element) {
             element.scrollTo({
                 top: element.scrollHeight,

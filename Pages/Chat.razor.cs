@@ -32,7 +32,7 @@ namespace ChatApp.Pages
         protected int currentOffset = 0;
         protected bool hasMoreMesssages = false;
         public bool _isScrolledToTop;
-
+        public bool _isLoadingOlder = false;
         protected override async Task OnInitializedAsync()
         {
             
@@ -47,7 +47,7 @@ namespace ChatApp.Pages
             await LoadMessagesAsync();
             await SetupRealtimeAsync();
                 // Scroll to bottom after initial loa
-            await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('end-of-messages').scrollIntoView({behavior:'smooth'})");
+            await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
         }
         protected override async Task OnAfterRenderAsync(bool firstRender)
         {
@@ -58,11 +58,16 @@ namespace ChatApp.Pages
         }
         public async Task LoadMessagesAsync(bool isInitialLoad = true)
         {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            if (isInitialLoad)
+            try
+            {
+                 if (isInitialLoad)
             {
                 currentOffset = 0;
                 Messages.Clear();
+            }
+            else
+            {
+                _isLoadingOlder = true;
             }
 
             var response = await SupabaseClient
@@ -115,12 +120,18 @@ namespace ChatApp.Pages
                 hasMoreMesssages = false;
             }
             StateHasChanged();
-            sw.Stop();
-            System.Diagnostics.Debug.WriteLine($"loadmessage function timer: {sw.ElapsedMilliseconds} ms");
+                
+            }
+            finally
+            {
+                _isLoadingOlder = false;
+                StateHasChanged();
+            }
+           
+
         }
         private async Task SetupRealtimeAsync()
         {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
             var channel = SupabaseClient.Realtime.Channel("public-messages");
         // 1. Generate a unique key for this session
             var presenceKey = Guid.NewGuid().ToString();
@@ -162,7 +173,7 @@ namespace ChatApp.Pages
                         Messages.Add(newMessage);
                         StateHasChanged();
                         await Task.Delay(50); // Small delay to ensure UI updates before scrolling
-                        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('end-of-messages').scrollIntoView({behavior:'smooth'})");
+                        await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
                     });
                 }
             });
@@ -174,8 +185,6 @@ namespace ChatApp.Pages
                 Username = CurrentUser ?? "Anonymous", 
                 OnlineAt = DateTime.Now 
             });
-            sw.Stop();
-            System.Diagnostics.Debug.WriteLine($"setuprealtime function timer: {sw.ElapsedMilliseconds} ms");
         }
         public async Task SendMessageAsync()
         {
@@ -187,7 +196,7 @@ namespace ChatApp.Pages
             var messageText = NewMessage;
             NewMessage = ""; 
             StateHasChanged(); // This makes the text disappear instantly for the user
-            await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('end-of-messages').scrollIntoView({behavior:'smooth'})");
+            await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
 
             try
             {
