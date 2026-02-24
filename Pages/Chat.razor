@@ -107,7 +107,6 @@
         var element = document.getElementById(id);
         if (element) {
             element.addEventListener('scroll', function () {
-                // Check if scroll is near the top
                 var isAtTop = element.scrollTop < 20;
                 dotNetHelper.invokeMethodAsync('OnChatScroll', isAtTop);
             });

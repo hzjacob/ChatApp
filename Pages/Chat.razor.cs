@@ -133,13 +133,13 @@ namespace ChatApp.Pages
         private async Task SetupRealtimeAsync()
         {
             var channel = SupabaseClient.Realtime.Channel("public-messages");
-        // 1. Generate a unique key for this session
+
             var presenceKey = Guid.NewGuid().ToString();
 
-            // 2. Register with your custom model and capture the presence manager
+
             var presence = channel.Register<PresenceUser>(presenceKey);
 
-            // 3. Attach the handler using the required EventType.Sync
+
             presence.AddPresenceEventHandler(Supabase.Realtime.Interfaces.IRealtimePresence.EventType.Sync, (sender, type) =>
             {
                 // Get the latest snapshot of who is online
@@ -157,13 +157,11 @@ namespace ChatApp.Pages
                     StateHasChanged();
                 });
             });
-            // 1. Register the listener for Inserts
             channel.Register(new PostgresChangesOptions("public", "messages", eventType: PostgresChangesOptions.ListenType.Inserts));
 
-            // 2. Use the non-generic handler
             channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, (sender, change) =>
             {
-                // Deserialization happens here
+
                 var newMessage = change.Model<Message>();
 
                 if (newMessage != null)
@@ -172,7 +170,7 @@ namespace ChatApp.Pages
                     {
                         Messages.Add(newMessage);
                         StateHasChanged();
-                        await Task.Delay(50); // Small delay to ensure UI updates before scrolling
+                        await Task.Delay(50); 
                         await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
                     });
                 }
@@ -192,10 +190,10 @@ namespace ChatApp.Pages
                 return;
             
             _isSending = true;
-            // 1. Capture the message and clear the input IMMEDIATELY
+
             var messageText = NewMessage;
             NewMessage = ""; 
-            StateHasChanged(); // This makes the text disappear instantly for the user
+            StateHasChanged();
             await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
 
             try
@@ -207,12 +205,10 @@ namespace ChatApp.Pages
                     CreatedAt = DateTime.UtcNow
                 };
 
-                // 2. Send to Supabase in the background
                 var response = await SupabaseClient.From<Message>().Insert(message);
 
                 if (response?.ResponseMessage?.IsSuccessStatusCode != true)
                 {
-                    // If it failed, give the text back so they don't lose it
                     NewMessage = messageText;
                     Snackbar.Add("Failed to send. Try again.", Severity.Error);
                 }

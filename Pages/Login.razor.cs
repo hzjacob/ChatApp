@@ -8,6 +8,7 @@ namespace ChatApp.Pages
     public partial class Login
     {
         private string? username;
+        private string? password;
         [Inject] NavigationManager Navigation { get; set; } = null!;
         [Inject] IJSRuntime JSRuntime { get; set; } = null!;
         
