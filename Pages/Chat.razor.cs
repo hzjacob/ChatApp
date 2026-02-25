@@ -19,7 +19,6 @@ namespace ChatApp.Pages
         [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
         [Inject] private Supabase.Client SupabaseClient { get; set; } = default!;
         [Inject] private ISnackbar Snackbar { get; set; } = default!;
-        // These properties are accessed by your Chat.razor
         public string? CurrentUser { get; set; }
         protected List<Message> Messages { get; set; } = new();
         protected string NewMessage { get; set; } = "";

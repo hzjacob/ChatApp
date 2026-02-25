@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
+using MudBlazor;
 using MudBlazor.Services;
 
 namespace ChatApp.Pages
@@ -9,6 +11,7 @@ namespace ChatApp.Pages
     {
         private string? username;
         private string? password;
+        InputType PasswordInput = InputType.Password;
         [Inject] NavigationManager Navigation { get; set; } = null!;
         [Inject] IJSRuntime JSRuntime { get; set; } = null!;
         
@@ -25,6 +28,10 @@ namespace ChatApp.Pages
             {
                 HandleLogin();
             }
+        }
+        private void GoToRegister()
+        {
+            Navigation.NavigateTo("/register");
         }
     }
 }

@@ -15,6 +15,7 @@
                       Label="Password" 
                       Variant="Variant.Outlined" 
                       FullWidth="true" 
+                      InputType="@PasswordInput"
                       Class="mb-4" 
                       Immediate = "true"
                       OnkeyDown="@HandleKeyPress"/>
@@ -25,5 +26,15 @@
                    OnClick="@HandleLogin">
             Login
         </MudButton>
+            <div class = "d-flex justify-center mt-6">
+                <MudText Typo="Typo.body2" Class="mr-2 mt-1"> Dont have an account </MudText>
+                <MudButton  Variant="Variant.Text"
+                            Color = "Color.Secondary"
+                            OnClick="@GoToRegister"
+                            Size="Size.Small"
+                            >
+                            Register
+                </MudButton>
+            </div>
     </MudPaper>
 </MudContainer>
