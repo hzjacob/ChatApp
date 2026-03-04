@@ -19,12 +19,12 @@ namespace ChatApp.Pages
 
                 var newUser = new 
                 {
-                    username = username,
-                    password = password,
-                    user_email = email
+                    Username = username,
+                    Password = password,
+                    User_email = email
                 };
 
-                var result = await client.PostAsJsonAsync("/api/users", newUser);
+                var result = await client.PostAsJsonAsync("/api/users/register", newUser);
 
                 if (result.IsSuccessStatusCode)
                 {

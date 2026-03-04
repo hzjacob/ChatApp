@@ -32,6 +32,7 @@ namespace ChatApp.Pages
         protected bool hasMoreMesssages = false;
         public bool _isScrolledToTop;
         public bool _isLoadingOlder = false;
+        private CancellationTokenSource? _presenceCts;
         protected override async Task OnInitializedAsync()
         {
             
@@ -135,26 +136,36 @@ namespace ChatApp.Pages
 
             var presenceKey = Guid.NewGuid().ToString();
 
-
             var presence = channel.Register<PresenceUser>(presenceKey);
 
+            
 
             presence.AddPresenceEventHandler(Supabase.Realtime.Interfaces.IRealtimePresence.EventType.Sync, (sender, type) =>
             {
                 // Get the latest snapshot of who is online
-                var state = presence.CurrentState;
+                _presenceCts?.Cancel();
+                _presenceCts = new CancellationTokenSource();
+                var token = _presenceCts.Token;
 
-                InvokeAsync(() =>
+                Task.Delay(500, token).ContinueWith(t =>
                 {
-                    // Flatten the dictionary and grab unique usernames
-                    OnlineUsers = state.Values
-                        .SelectMany(x => x)
-                        .Select(u => u.Username)
-                        .Distinct()
-                        .ToList();
+                    if(t.IsCompletedSuccessfully && !token.IsCancellationRequested)
+                    {
+                        InvokeAsync(() =>
+                        {
+                            // Flatten the dictionary and grab unique usernames
+                            var state = presence.CurrentState;
+                            OnlineUsers = state.Values
+                                .SelectMany(x => x)
+                                .Select(u => u.Username)
+                                .Distinct()
+                                .ToList();
 
-                    StateHasChanged();
+                            StateHasChanged();
+                        });
+                    }
                 });
+
             });
             channel.Register(new PostgresChangesOptions("public", "messages", eventType: PostgresChangesOptions.ListenType.Inserts));
 
