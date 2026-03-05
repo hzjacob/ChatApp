@@ -10,6 +10,7 @@ using Supabase.Realtime.PostgresChanges;
 using Microsoft.IdentityModel.Tokens;
 using Supabase.Realtime.Models;
 using System.Text.Json.Serialization;
+using System.Net.Http.Json;
 
 namespace ChatApp.Pages
 {
@@ -19,8 +20,9 @@ namespace ChatApp.Pages
         [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
         [Inject] private Supabase.Client SupabaseClient { get; set; } = default!;
         [Inject] private ISnackbar Snackbar { get; set; } = default!;
+        [Inject] IHttpClientFactory ClientFactory {get; set;} =default!;
         public string? CurrentUser { get; set; }
-        protected List<Message> Messages { get; set; } = new();
+        protected List<MessageDTO> Messages { get; set; } = new();
         protected string NewMessage { get; set; } = "";
         protected ElementReference chatMessages;
         public List<string> OnlineUsers { get; set; } = new();
@@ -70,15 +72,15 @@ namespace ChatApp.Pages
                 _isLoadingOlder = true;
             }
 
-            var response = await SupabaseClient
-                .From<Message>()
-                .Order("created_at", Ordering.Descending)
-                .Range(currentOffset, currentOffset + messagePageSize - 1)
-                .Get();
+            var url = $"api/message/paged?currentOffset={currentOffset}&messagePagesize={messagePageSize}";
 
-            if (response.Models.Any())
+            var client = ClientFactory.CreateClient("ChatAppAPI");
+
+            var response = await client.GetFromJsonAsync<List<MessageDTO>>(url);
+
+            if (response!= null && response.Any())
             {
-                var newMessage = response.Models.OrderBy(x => x.CreatedAt).ToList();
+                var newMessage = response.OrderBy(x => x.CreatedAt).ToList();
                 
                 if (isInitialLoad)
                 {
@@ -113,7 +115,7 @@ namespace ChatApp.Pages
                 }
 
                 currentOffset += messagePageSize;
-                hasMoreMesssages = response.Models.Count >= messagePageSize;
+                hasMoreMesssages = response.Count >= messagePageSize;
             }
             else
             {
@@ -169,22 +171,35 @@ namespace ChatApp.Pages
             });
             channel.Register(new PostgresChangesOptions("public", "messages", eventType: PostgresChangesOptions.ListenType.Inserts));
 
-            channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, (sender, change) =>
+        channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, (sender, change) =>
+        {
+            // 1. Get the raw model from Supabase (Message)
+            var supabaseMessage = change.Model<Message>();
+
+            if (supabaseMessage != null)
             {
-
-                var newMessage = change.Model<Message>();
-
-                if (newMessage != null)
+                InvokeAsync(async () =>
                 {
-                    InvokeAsync(async () =>
+                    // 2. Transform it into a MessageDTO (This fixes CS1503)
+                    var displayMessage = new MessageDTO
                     {
-                        Messages.Add(newMessage);
-                        StateHasChanged();
-                        await Task.Delay(50); 
-                        await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
-                    });
-                }
-            });
+                        Id = supabaseMessage.Id,
+                        Username = supabaseMessage.Username,
+                        Content = supabaseMessage.Content,
+                        CreatedAt = supabaseMessage.CreatedAt
+                    };
+
+                    // 3. Add the DTO to your display list
+                    Messages.Add(displayMessage);
+                    
+                    StateHasChanged();
+                    
+                    // Optimization: Small delay to ensure the UI has rendered the new HTML
+                    await Task.Delay(50); 
+                    await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
+                });
+            }
+        });
             
             await channel.Subscribe();
 

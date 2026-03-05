@@ -16,5 +16,9 @@ namespace ChatApp.Models
 
         [Column("created_at")]
         public DateTime CreatedAt { get; set; }
+        [Column("send_to")]
+        public int SendTo {get; set;}
+        [Column("room_id")]
+        public string? RoomId {get; set;}
     }
 }
