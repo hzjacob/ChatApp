@@ -35,6 +35,9 @@
             public bool _isScrolledToTop;
             public bool _isLoadingOlder = false;
             private CancellationTokenSource? _presenceCts;
+            protected List<string> TypingUsers {get; set;} = new();
+            private System.Timers.Timer? _typingTimer;
+
             protected override async Task OnInitializedAsync()
             {
                 
@@ -267,6 +270,46 @@
                 else
                 {
                     _shouldPreventDefault = false;
+                }
+
+            }
+            public async Task HandleLogout()
+            {
+                
+                try
+                {
+                    await JSRuntime.InvokeVoidAsync("sessionStorage.removeItem", "username");
+                    SupabaseClient.Realtime.Disconnect();
+                }
+                catch(Exception ex)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+                    
+                    
+                Navigation.NavigateTo("/");
+            }
+            public async ValueTask DisposeAsync()
+            {
+                try 
+                {
+                    var channel = SupabaseClient.Realtime.Channel("public-messages");
+                    if (channel != null)
+                    {
+                        channel.Unsubscribe();
+                        SupabaseClient.Realtime.Remove(channel); 
+                    }
+
+                    SupabaseClient.Realtime.Disconnect();
+
+                    _presenceCts?.Cancel();
+                    _presenceCts?.Dispose();
+                    
+                    Console.WriteLine("Chat component cleaned up and channel removed.");
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error during disposal: {ex.Message}");
                 }
             }
             [JSInvokable] 

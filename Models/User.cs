@@ -8,5 +8,7 @@ namespace ChatApp.Models
         public string Username { get; set; } = string.Empty;
         [JsonPropertyName("online_at")]
         public DateTime OnlineAt { get; set; }
+        [JsonPropertyName("is_typing")]
+        public bool IsTyping {get; set;}
     }
 }
