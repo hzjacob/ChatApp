@@ -1,276 +1,284 @@
-using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Web;
-using Microsoft.JSInterop;
-using MudBlazor;
-using Supabase;
-using Postgrest;
-using ChatApp.Models;
-using static Postgrest.Constants;
-using Supabase.Realtime.PostgresChanges;
-using Microsoft.IdentityModel.Tokens;
-using Supabase.Realtime.Models;
-using System.Text.Json.Serialization;
-using System.Net.Http.Json;
+    using Microsoft.AspNetCore.Components;
+    using Microsoft.AspNetCore.Components.Web;
+    using Microsoft.JSInterop;
+    using MudBlazor;
+    using Supabase;
+    using Postgrest;
+    using ChatApp.Models;
+    using static Postgrest.Constants;
+    using Supabase.Realtime.PostgresChanges;
+    using Microsoft.IdentityModel.Tokens;
+    using Supabase.Realtime.Models;
+    using System.Text.Json.Serialization;
+    using System.Net.Http.Json;
 
-namespace ChatApp.Pages
-{
-    public partial class ChatBase : ComponentBase
+    namespace ChatApp.Pages
     {
-        [Inject] private NavigationManager Navigation { get; set; } = default!;
-        [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
-        [Inject] private Supabase.Client SupabaseClient { get; set; } = default!;
-        [Inject] private ISnackbar Snackbar { get; set; } = default!;
-        [Inject] IHttpClientFactory ClientFactory {get; set;} =default!;
-        public string? CurrentUser { get; set; }
-        protected List<MessageDTO> Messages { get; set; } = new();
-        protected string NewMessage { get; set; } = "";
-        protected ElementReference chatMessages;
-        public List<string> OnlineUsers { get; set; } = new();
-
-        public bool _shouldPreventDefault = false;
-        public bool _isSending = false;
-        protected int messagePageSize = 20;
-        protected int currentOffset = 0;
-        protected bool hasMoreMesssages = false;
-        public bool _isScrolledToTop;
-        public bool _isLoadingOlder = false;
-        private CancellationTokenSource? _presenceCts;
-        protected override async Task OnInitializedAsync()
+        public partial class ChatBase : ComponentBase
         {
-            
-            CurrentUser = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", "username");
+            [Inject] private NavigationManager Navigation { get; set; } = default!;
+            [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+            [Inject] private Supabase.Client SupabaseClient { get; set; } = default!;
+            [Inject] private ISnackbar Snackbar { get; set; } = default!;
+            [Inject] IHttpClientFactory ClientFactory {get; set;} =default!;
+            public string? CurrentUser { get; set; }
+            protected List<MessageDTO> Messages { get; set; } = new();
+            protected string NewMessage { get; set; } = "";
+            protected ElementReference chatMessages;
+            public List<string> OnlineUsers { get; set; } = new();
 
-            if (string.IsNullOrEmpty(CurrentUser))
+            public bool _shouldPreventDefault = false;
+            public bool _isSending = false;
+            protected int messagePageSize = 20;
+            protected int currentOffset = 0;
+            protected bool hasMoreMesssages = false;
+            public bool _isScrolledToTop;
+            public bool _isLoadingOlder = false;
+            private CancellationTokenSource? _presenceCts;
+            protected override async Task OnInitializedAsync()
             {
-                Navigation.NavigateTo("/");
-                return;
-            }
-            await SupabaseClient.Realtime.ConnectAsync();
-            await LoadMessagesAsync();
-            await SetupRealtimeAsync();
-                // Scroll to bottom after initial loa
-            await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
-        }
-        protected override async Task OnAfterRenderAsync(bool firstRender)
-        {
-            if (firstRender)
-            {
-                    await JSRuntime.InvokeVoidAsync("watchChatScrollById", "chat-container", DotNetObjectReference.Create(this));
-            }
-        }
-        public async Task LoadMessagesAsync(bool isInitialLoad = true)
-        {
-            try
-            {
-                 if (isInitialLoad)
-            {
-                currentOffset = 0;
-                Messages.Clear();
-            }
-            else
-            {
-                _isLoadingOlder = true;
-            }
-
-            var url = $"api/message/paged?currentOffset={currentOffset}&messagePagesize={messagePageSize}";
-
-            var client = ClientFactory.CreateClient("ChatAppAPI");
-
-            var response = await client.GetFromJsonAsync<List<MessageDTO>>(url);
-
-            if (response!= null && response.Any())
-            {
-                var newMessage = response.OrderBy(x => x.CreatedAt).ToList();
                 
-                if (isInitialLoad)
+                CurrentUser = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", "username");
+
+                if (string.IsNullOrEmpty(CurrentUser))
                 {
-                    Messages = newMessage;
-                    StateHasChanged(); // Let UI render first
-                    
-                    // Traditional scroll to bottom for first load
+                    Navigation.NavigateTo("/");
+                    return;
+                }
+                await SupabaseClient.Realtime.ConnectAsync();
+                await LoadMessagesAsync();
+                await SetupRealtimeAsync();
+                    // Scroll to bottom after initial loa
+                await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
+            }
+            protected override async Task OnAfterRenderAsync(bool firstRender)
+            {
+                if (firstRender)
+                {
+                        await JSRuntime.InvokeVoidAsync("watchChatScrollById", "chat-container", DotNetObjectReference.Create(this));
+                }
+            }
+            public async Task LoadMessagesAsync(bool isInitialLoad = true)
+            {
+                try
+                {
+                    if (isInitialLoad)
+                {
+                    currentOffset = 0;
+                    Messages.Clear();
                 }
                 else
                 {
-                    // --- THE INSTANT PIN LOGIC ---
-                    // Use the class you applied to your MudCardContent
-                    var selector = ".mud-card-content"; 
-
-                    // 1. Save the current distance from the bottom
-                    var scrollInfo = await JSRuntime.InvokeAsync<double>("eval", 
-                        $"var el = document.querySelector('{selector}'); el.scrollHeight - el.scrollTop");
-
-                    // 2. Add the older messages to the top
-                    Messages.InsertRange(0, newMessage);
-                    
-                    // 3. Trigger Blazor render
-                    StateHasChanged();
-
-                    // 4. Restore the position in the next animation frame to prevent "flicker"
-                    await JSRuntime.InvokeVoidAsync("eval", $@"
-                        requestAnimationFrame(() => {{
-                            var el = document.querySelector('{selector}');
-                            el.scrollTop = el.scrollHeight - {scrollInfo};
-                        }});
-                    ");
+                    _isLoadingOlder = true;
                 }
 
-                currentOffset += messagePageSize;
-                hasMoreMesssages = response.Count >= messagePageSize;
-            }
-            else
-            {
-                hasMoreMesssages = false;
-            }
-            StateHasChanged();
-                
-            }
-            finally
-            {
-                _isLoadingOlder = false;
+                var url = $"api/message/paged?currentOffset={currentOffset}&messagePagesize={messagePageSize}";
+
+                var client = ClientFactory.CreateClient("ChatAppAPI");
+
+                var response = await client.GetFromJsonAsync<List<MessageDTO>>(url);
+
+                if (response!= null && response.Any())
+                {
+                    var newMessage = response.OrderBy(x => x.CreatedAt).ToList();
+                    
+                    if (isInitialLoad)
+                    {
+                        Messages = newMessage;
+                        StateHasChanged(); // Let UI render first
+                        
+                        // Traditional scroll to bottom for first load
+                    }
+                    else
+                    {
+                        // --- THE INSTANT PIN LOGIC ---
+                        // Use the class you applied to your MudCardContent
+                        var selector = ".mud-card-content"; 
+
+                        // 1. Save the current distance from the bottom
+                        var scrollInfo = await JSRuntime.InvokeAsync<double>("eval", 
+                            $"var el = document.querySelector('{selector}'); el.scrollHeight - el.scrollTop");
+
+                        // 2. Add the older messages to the top
+                        Messages.InsertRange(0, newMessage);
+                        
+                        // 3. Trigger Blazor render
+                        StateHasChanged();
+
+                        // 4. Restore the position in the next animation frame to prevent "flicker"
+                        await JSRuntime.InvokeVoidAsync("eval", $@"
+                            requestAnimationFrame(() => {{
+                                var el = document.querySelector('{selector}');
+                                el.scrollTop = el.scrollHeight - {scrollInfo};
+                            }});
+                        ");
+                    }
+
+                    currentOffset += messagePageSize;
+                    hasMoreMesssages = response.Count >= messagePageSize;
+                }
+                else
+                {
+                    hasMoreMesssages = false;
+                }
                 StateHasChanged();
-            }
-           
-
-        }
-        private async Task SetupRealtimeAsync()
-        {
-            var channel = SupabaseClient.Realtime.Channel("public-messages");
-
-            var presenceKey = Guid.NewGuid().ToString();
-
-            var presence = channel.Register<PresenceUser>(presenceKey);
-
+                    
+                }
+                finally
+                {
+                    _isLoadingOlder = false;
+                    StateHasChanged();
+                }
             
 
-            presence.AddPresenceEventHandler(Supabase.Realtime.Interfaces.IRealtimePresence.EventType.Sync, (sender, type) =>
+            }
+            private async Task SetupRealtimeAsync()
             {
-                // Get the latest snapshot of who is online
-                _presenceCts?.Cancel();
-                _presenceCts = new CancellationTokenSource();
-                var token = _presenceCts.Token;
+                var channel = SupabaseClient.Realtime.Channel("public-messages");
 
-                Task.Delay(500, token).ContinueWith(t =>
+                var presenceKey = Guid.NewGuid().ToString();
+
+                var presence = channel.Register<PresenceUser>(presenceKey);
+
+                
+
+                presence.AddPresenceEventHandler(Supabase.Realtime.Interfaces.IRealtimePresence.EventType.Sync, (sender, type) =>
                 {
-                    if(t.IsCompletedSuccessfully && !token.IsCancellationRequested)
+                    // Get the latest snapshot of who is online
+                    _presenceCts?.Cancel();
+                    _presenceCts = new CancellationTokenSource();
+                    var token = _presenceCts.Token;
+
+                    Task.Delay(500, token).ContinueWith(t =>
                     {
-                        InvokeAsync(() =>
+                        if(t.IsCompletedSuccessfully && !token.IsCancellationRequested)
                         {
-                            // Flatten the dictionary and grab unique usernames
-                            var state = presence.CurrentState;
-                            OnlineUsers = state.Values
-                                .SelectMany(x => x)
-                                .Select(u => u.Username)
-                                .Distinct()
-                                .ToList();
+                            InvokeAsync(() =>
+                            {
+                                // Flatten the dictionary and grab unique usernames
+                                var state = presence.CurrentState;
+                                OnlineUsers = state.Values
+                                    .SelectMany(x => x)
+                                    .Select(u => u.Username)
+                                    .Distinct()
+                                    .ToList();
 
-                            StateHasChanged();
-                        });
-                    }
+                                StateHasChanged();
+                            });
+                        }
+                    });
+
                 });
+                channel.Register(new PostgresChangesOptions("public", "messages", eventType: PostgresChangesOptions.ListenType.Inserts));
 
-            });
-            channel.Register(new PostgresChangesOptions("public", "messages", eventType: PostgresChangesOptions.ListenType.Inserts));
-
-        channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, (sender, change) =>
-        {
-            // 1. Get the raw model from Supabase (Message)
-            var supabaseMessage = change.Model<Message>();
-
-            if (supabaseMessage != null)
+            channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, async (sender, change) =>
             {
-                InvokeAsync(async () =>
+                var data = change.Model<Message>();
+
+                if(data == null)
                 {
-                    // 2. Transform it into a MessageDTO (This fixes CS1503)
-                    var displayMessage = new MessageDTO
+                    Console.WriteLine("Data is null");
+                }
+
+                if (data != null)
+                {
+                    await InvokeAsync(async () =>
                     {
-                        Id = supabaseMessage.Id,
-                        Username = supabaseMessage.Username,
-                        Content = supabaseMessage.Content,
-                        CreatedAt = supabaseMessage.CreatedAt
+                        var displayMessage = new MessageDTO
+                        {
+                            Id = data.Id,
+                            Username = data.Username,
+                            Content = data.Content,
+                            CreatedAt = data.CreatedAt,
+                            SendTo = data.SendTo,
+                            RoomId = data.RoomId
+                        };
+
+                        Messages = Messages.Append(displayMessage).ToList();
+
+                        StateHasChanged();
+
+                        await Task.Delay(50);
+                        await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
+                    });
+                }
+            });
+                
+                await channel.Subscribe();
+
+                presence.Track(new PresenceUser 
+                { 
+                    Username = CurrentUser ?? "Anonymous", 
+                    OnlineAt = DateTime.Now 
+                });
+            }
+            public async Task SendMessageAsync()
+            {
+                if (string.IsNullOrWhiteSpace(NewMessage) || _isSending)
+                    return;
+                
+                _isSending = true;
+
+                var messageText = NewMessage;
+                NewMessage = ""; 
+                StateHasChanged();
+                await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
+
+                try
+                {
+                    var message = new MessageDTO
+                    {
+                        Username = CurrentUser ?? "Anonymous",
+                        Content = messageText,
+                        CreatedAt = DateTime.UtcNow,
+                        SendTo = null,
+                        RoomId = null
                     };
 
-                    // 3. Add the DTO to your display list
-                    Messages.Add(displayMessage);
-                    
-                    StateHasChanged();
-                    
-                    // Optimization: Small delay to ensure the UI has rendered the new HTML
-                    await Task.Delay(50); 
-                    await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
-                });
-            }
-        });
-            
-            await channel.Subscribe();
+                    var client = ClientFactory.CreateClient("ChatAppAPI");
 
-            presence.Track(new PresenceUser 
-            { 
-                Username = CurrentUser ?? "Anonymous", 
-                OnlineAt = DateTime.Now 
-            });
-        }
-        public async Task SendMessageAsync()
-        {
-            if (string.IsNullOrWhiteSpace(NewMessage) || _isSending)
-                return;
-            
-            _isSending = true;
+                    var request = await client.PostAsJsonAsync("/api/message", message);
 
-            var messageText = NewMessage;
-            NewMessage = ""; 
-            StateHasChanged();
-            await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
-
-            try
-            {
-                var message = new Message
-                {
-                    Username = CurrentUser ?? "Anonymous",
-                    Content = messageText,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                var response = await SupabaseClient.From<Message>().Insert(message);
-
-                if (response?.ResponseMessage?.IsSuccessStatusCode != true)
+                    if (request?.IsSuccessStatusCode != true)
+                    {
+                        NewMessage = messageText;
+                        Snackbar.Add("Failed to send. Try again.", Severity.Error);
+                    }
+                }
+                catch (Exception ex)
                 {
                     NewMessage = messageText;
-                    Snackbar.Add("Failed to send. Try again.", Severity.Error);
+                    Snackbar.Add("Connection error.", Severity.Error);
+                    Console.WriteLine(ex.Message);
+                }
+                finally
+                {
+                    _isSending = false;
+                    StateHasChanged();
                 }
             }
-            catch (Exception ex)
+            public async Task HandleKeyPress(KeyboardEventArgs e)
             {
-                NewMessage = messageText;
-                Snackbar.Add("Connection error.", Severity.Error);
+                if (e.Key == "Enter" && !e.ShiftKey )
+                {
+                    _shouldPreventDefault =true;
+                    await SendMessageAsync();
+                }
+                else
+                {
+                    _shouldPreventDefault = false;
+                }
             }
-            finally
+            [JSInvokable] 
+            public void OnChatScroll(bool atTop) 
             {
-                _isSending = false;
-                StateHasChanged();
-            }
-        }
-        public async Task HandleKeyPress(KeyboardEventArgs e)
-        {
-            if (e.Key == "Enter" && !e.ShiftKey )
-            {
-                _shouldPreventDefault =true;
-                await SendMessageAsync();
-            }
-            else
-            {
-                _shouldPreventDefault = false;
-            }
-        }
-        [JSInvokable] 
-        public void OnChatScroll(bool atTop) 
-        {
-            if (_isScrolledToTop != atTop) 
-            {
+                if (_isScrolledToTop != atTop) 
+                {
 
-                _isScrolledToTop = atTop;
+                    _isScrolledToTop = atTop;
 
-                StateHasChanged(); 
+                    StateHasChanged(); 
+                }
             }
         }
     }
-}
