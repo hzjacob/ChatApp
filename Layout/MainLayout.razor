@@ -1,5 +1,6 @@
-﻿@inherits LayoutComponentBase
-
+﻿@using ChatApp.Pages
+@inherits LayoutComponentBase
+@inject NavigationManager Nav
 @* Essential providers for styling, dialogs, and notifications *@
 <MudThemeProvider />
 <MudPopoverProvider />
@@ -8,28 +9,44 @@
 
 <MudLayout>
     <MudAppBar Elevation="1">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        @* We removed the hamburger menu button entirely *@
         <MudText Typo="Typo.h5" Class="ml-3">ChatApp</MudText>
         <MudSpacer />
-        <MudLink Href="https://learn.microsoft.com/aspnet/core/" Color="Color.Inherit" Target="_blank">About</MudLink>
+        @* You can put Logout or Profile buttons here instead *@
+        @if (IsChatPage)
+        {
+        <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                <MudMenuItem Icon="@Icons.Material.Filled.Person" Disabled="true">My Profile</MudMenuItem>
+                <MudDivider />
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="@Logout">Logout</MudMenuItem>
+        </MudMenu>
+        }
     </MudAppBar>
-    
-    <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="2">
-        <NavMenu />
-    </MudDrawer>
 
-    <MudMainContent>
-        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="my-4">
-            @Body
-        </MudContainer>
+    @* The sidebar (MudDrawer) is deleted from here *@
+
+    <MudMainContent Class="pt-4 px-2">
+        @Body
     </MudMainContent>
 </MudLayout>
 
 @code {
     bool _drawerOpen = true;
+    private bool IsChatPage => Nav.Uri.EndsWith("/chat")  || Nav.Uri.Contains("/chat/");
 
-    void DrawerToggle()
+    void DrawerToggle() => _drawerOpen = !_drawerOpen;
+
+    protected override void OnInitialized()
     {
-        _drawerOpen = !_drawerOpen;
+        Nav.LocationChanged += (s,e) => StateHasChanged();
+    }
+    public void Dispose()
+    {
+        Nav.LocationChanged += (s,e) => StateHasChanged();
+    }
+
+    private async Task Logout()
+    {
+        Nav.NavigateTo("/");
     }
 }

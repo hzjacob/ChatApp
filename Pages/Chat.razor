@@ -2,22 +2,24 @@
 @namespace ChatApp.Pages
 @inherits ChatBase
 @implements IAsyncDisposable
-<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
-    <MudGrid>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16 pb-8">
+    <MudGrid Justify="Justify.Center">
         @* Left Sidebar - Active Users/Rooms *@
-        <MudPaper Elevation="3" Class="pa-4" Style="height: 80vh; border-radius: 16px;">
-            <MudText Typo="Typo.h6" Class="mb-4">Online Users (@OnlineUsers.Count)</MudText>
-            <MudList T="string">
-                @foreach (var user in OnlineUsers)
-                {
-                    <MudListItem Icon="@Icons.Material.Filled.Circle" 
-                                IconColor="@(user == CurrentUser ? Color.Primary : Color.Success)">
-                        @user @(user == CurrentUser ? "(You)" : "")
-                        
-                    </MudListItem>
-                }
-            </MudList>
-        </MudPaper>
+        <MudItem xs="12" sm="3" Class="d-none d-sm-block">
+            <MudPaper Elevation="3" Class="pa-4" Style="height: 80vh; border-radius: 16px; overflow-y: auto;">
+                <MudText Typo="Typo.h6" Class="mb-4">Online (@OnlineUsers.Count)</MudText>
+                <MudList T="string">
+                    @foreach (var user in OnlineUsers)
+                    {
+                        <MudListItem Icon="@Icons.Material.Filled.Circle" 
+                                    IconColor="@(user == CurrentUser ? Color.Primary : Color.Success)">
+                            <MudText Typo="Typo.body2">@user @(user == CurrentUser ? "(You)" : "")</MudText>
+                        </MudListItem>
+                    }
+                </MudList>
+            </MudPaper>
+        </MudItem>  
 
         @* Right Side - Chat Window *@
         <MudItem xs="12" sm="9">
