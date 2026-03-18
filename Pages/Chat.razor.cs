@@ -37,17 +37,19 @@
             private CancellationTokenSource? _presenceCts;
             protected List<string> TypingUsers {get; set;} = new();
             private System.Timers.Timer? _typingTimer;
+            public string? Token {get; set;}
 
             protected override async Task OnInitializedAsync()
             {
                 
                 CurrentUser = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", "username");
+                Token = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
 
-                if (string.IsNullOrEmpty(CurrentUser))
-                {
-                    Navigation.NavigateTo("/");
-                    return;
-                }
+                if (string.IsNullOrEmpty(CurrentUser) || string.IsNullOrEmpty(Token))
+                    {
+                        Navigation.NavigateTo("/");
+                        return;
+                    }
                 await SupabaseClient.Realtime.ConnectAsync();
                 await LoadMessagesAsync();
                 await SetupRealtimeAsync();
@@ -78,7 +80,9 @@
                 var url = $"api/message/paged?currentOffset={currentOffset}&messagePagesize={messagePageSize}";
 
                 var client = ClientFactory.CreateClient("ChatAppAPI");
-
+                client.DefaultRequestHeaders.Authorization = 
+                new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
+                
                 var response = await client.GetFromJsonAsync<List<MessageDTO>>(url);
 
                 if (response!= null && response.Any())
@@ -239,6 +243,9 @@
                     };
 
                     var client = ClientFactory.CreateClient("ChatAppAPI");
+                    
+                    client.DefaultRequestHeaders.Authorization = 
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
 
                     var request = await client.PostAsJsonAsync("/api/message", message);
 

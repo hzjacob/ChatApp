@@ -40,9 +40,13 @@ namespace ChatApp.Pages
                 if (request.IsSuccessStatusCode)
                 {
                     var response = await request.Content.ReadFromJsonAsync<UserDto>();
-                    string username = response.Username;
+                    if(response.Token != null)
+                    {
+                        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", response.Token);
+                        await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "username", response.Username);
+                    }
 
-                    await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "username", username);
+
                     Navigation.NavigateTo("/chat");
                 }
                 else
