@@ -10,35 +10,51 @@ namespace ChatApp.Pages
 {
     public partial class Login
     {
+        private bool _loading;
         private string? email;
         private string? password;
+        bool isShow;
+        string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
         InputType PasswordInput = InputType.Password;
         [Inject] NavigationManager Navigation { get; set; } = null!;
         [Inject] IJSRuntime JSRuntime { get; set; } = null!;
         [Inject] IHttpClientFactory ClientFactory { get; set; } = null!;
+        [Inject] ISnackbar Snackbar {get; set;} = default!;
         
         private async Task HandleLogin()
         {
-            var loginUser = new 
+            if(_loading) return;
+
+            _loading = true;
+            try
             {
-                User_email = email,
-                Password = password
-            };
-            var client = ClientFactory.CreateClient("ChatAppAPI");
+                var loginUser = new 
+                {
+                    User_email = email,
+                    Password = password
+                };
+                var client = ClientFactory.CreateClient("ChatAppAPI");
 
-            var request = await client.PostAsJsonAsync("api/users/login", loginUser);
+                var request = await client.PostAsJsonAsync("api/users/login", loginUser);
 
-            if (request.IsSuccessStatusCode)
-            {
-                var response = await request.Content.ReadFromJsonAsync<UserDto>();
-                string username = response.Username;
+                if (request.IsSuccessStatusCode)
+                {
+                    var response = await request.Content.ReadFromJsonAsync<UserDto>();
+                    string username = response.Username;
 
-                await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "username", username);
-                Navigation.NavigateTo("/chat");
+                    await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "username", username);
+                    Navigation.NavigateTo("/chat");
+                }
+                else
+                {
+                    Navigation.NavigateTo("/Home");
+                }
+
             }
-            else
+            catch(Exception ex)
             {
-                Navigation.NavigateTo("/Home");
+                _loading = false;
+                Snackbar.Add(ex.Message, Severity.Error);
             }
 
             
@@ -54,6 +70,21 @@ namespace ChatApp.Pages
         private void GoToRegister()
         {
             Navigation.NavigateTo("/register");
+        }
+        private void TogglePasswordVisibility()
+        {
+            if (isShow)
+            {
+                isShow = false;
+                PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
+                PasswordInput = InputType.Password;
+            }
+            else
+            {
+                isShow = true;
+                PasswordInputIcon = Icons.Material.Filled.Visibility;
+                PasswordInput = InputType.Text;
+            }
         }
     }
 }

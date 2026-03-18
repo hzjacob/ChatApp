@@ -18,6 +18,7 @@ builder.Services.AddHttpClient("ChatAppAPI", client =>
     client.BaseAddress = new Uri("http://localhost:5145");
 });
 builder.Services.AddMudServices();
+builder.Services.AddScoped<ChatApp.Services.States>();
 builder.Services.AddSingleton( provider =>
     new Supabase.Client(supabaseUrl, supabaseKey, new SupabaseOptions
     {

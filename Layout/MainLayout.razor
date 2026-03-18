@@ -1,4 +1,5 @@
 ﻿@using ChatApp.Pages
+@inject ChatApp.Services.States ChatState
 @inherits LayoutComponentBase
 @inject NavigationManager Nav
 @* Essential providers for styling, dialogs, and notifications *@
@@ -9,16 +10,19 @@
 
 <MudLayout>
     <MudAppBar Elevation="1">
-        @* We removed the hamburger menu button entirely *@
-        <MudText Typo="Typo.h5" Class="ml-3">ChatApp</MudText>
+        <MudLink Href="/" Underline="Underline.None" Class="d-flex align-center">
+        <img src="images/logo.png" 
+             alt="ChatApp Logo" 
+             style="height: 85px; width: auto; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); transition: transform 0.3s ease;" 
+             class="logo-hover" />
+        </MudLink>
         <MudSpacer />
-        @* You can put Logout or Profile buttons here instead *@
         @if (IsChatPage)
         {
         <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
                 <MudMenuItem Icon="@Icons.Material.Filled.Person" Disabled="true">My Profile</MudMenuItem>
                 <MudDivider />
-                <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="@Logout">Logout</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Filled.Logout" OnClick="@(() => ChatState.Logout(null))">Logout</MudMenuItem>
         </MudMenu>
         }
     </MudAppBar>
@@ -45,8 +49,9 @@
         Nav.LocationChanged += (s,e) => StateHasChanged();
     }
 
-    private async Task Logout()
-    {
-        Nav.NavigateTo("/");
-    }
 }
+<style>
+    .logo-hover:hover {
+        transform: scale(1.08);
+    }
+</style>    
