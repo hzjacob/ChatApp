@@ -42,16 +42,18 @@ namespace ChatApp.Pages
                     var response = await request.Content.ReadFromJsonAsync<UserDto>();
                     if(response.Token != null)
                     {
+                        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "refreshToken", response.RefreshToken);
                         await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", response.Token);
                         await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "username", response.Username);
                     }
 
 
                     Navigation.NavigateTo("/chat");
+                    Console.WriteLine(response.RefreshToken);
                 }
                 else
                 {
-                    Navigation.NavigateTo("/Home");
+                    Navigation.NavigateTo("/");
                 }
 
             }

@@ -38,22 +38,23 @@
             protected List<string> TypingUsers {get; set;} = new();
             private System.Timers.Timer? _typingTimer;
             public string? Token {get; set;}
+            public string? RefreshToken{get; set;}
+            private TaskCompletionSource<bool> _initialSyncReceived = new();
 
             protected override async Task OnInitializedAsync()
             {
-                
+                RefreshToken = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "refreshToken");
                 CurrentUser = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", "username");
                 Token = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
 
                 if (string.IsNullOrEmpty(CurrentUser) || string.IsNullOrEmpty(Token))
-                    {
+                {
                         Navigation.NavigateTo("/");
                         return;
-                    }
+                }
                 await SupabaseClient.Realtime.ConnectAsync();
                 await LoadMessagesAsync();
                 await SetupRealtimeAsync();
-                    // Scroll to bottom after initial loa
                 await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
             }
             protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -141,6 +142,7 @@
             }
             private async Task SetupRealtimeAsync()
             {
+
                 var channel = SupabaseClient.Realtime.Channel("public-messages");
 
                 var presenceKey = Guid.NewGuid().ToString();
@@ -156,7 +158,7 @@
                     _presenceCts = new CancellationTokenSource();
                     var token = _presenceCts.Token;
 
-                    Task.Delay(500, token).ContinueWith(t =>
+                    Task.Delay(300, token).ContinueWith(t =>
                     {
                         if(t.IsCompletedSuccessfully && !token.IsCancellationRequested)
                         {
@@ -164,6 +166,8 @@
                             {
                                 // Flatten the dictionary and grab unique usernames
                                 var state = presence.CurrentState;
+
+                                Console.WriteLine($"state:{state.Count} ");
                                 OnlineUsers = state.Values
                                     .SelectMany(x => x)
                                     .Select(u => u.Username)
@@ -171,9 +175,11 @@
                                     .ToList();
 
                                 StateHasChanged();
+
+                                _initialSyncReceived.TrySetResult(true);
                             });
                         }
-                    });
+                    }, token);
 
                 });
                 channel.Register(new PostgresChangesOptions("public", "messages", eventType: PostgresChangesOptions.ListenType.Inserts));
@@ -213,11 +219,17 @@
                 
                 await channel.Subscribe();
 
-                presence.Track(new PresenceUser 
-                { 
-                    Username = CurrentUser ?? "Anonymous", 
-                    OnlineAt = DateTime.Now 
-                });
+                await Task.WhenAny(_initialSyncReceived.Task, Task.Delay(3000));
+
+                if (channel.State == Supabase.Realtime.Constants.ChannelState.Joined)
+                    {
+                        presence.Track(new PresenceUser 
+                        { 
+                            Username = CurrentUser ?? "Anonymous", 
+                            OnlineAt = DateTime.Now,
+                            SessionId = presenceKey
+                        });
+                    }
             }
             public async Task SendMessageAsync()
             {
