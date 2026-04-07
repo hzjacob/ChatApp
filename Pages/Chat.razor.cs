@@ -299,22 +299,35 @@
             {
                 try
                 {
-                    var channel = SupabaseClient.Realtime.Channel("online");
-                    channel.Register(new PostgresChangesOptions("public", "online_users", eventType: PostgresChangesOptions.ListenType.All));
-                    channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.All, async (sender, change) =>
+                    var channel = SupabaseClient.Realtime.Channel("online-presence-only");
+
+                    // 1. Listen ONLY for brand new people joining
+                    var insertOptions = new PostgresChangesOptions("public", "online_users", 
+                        eventType: PostgresChangesOptions.ListenType.Inserts);
+                    
+                    // 2. Listen ONLY for the Cron job (or logout) deleting someone
+                    var deleteOptions = new PostgresChangesOptions("public", "online_users", 
+                        eventType: PostgresChangesOptions.ListenType.Deletes);
+
+                    channel.Register(insertOptions);
+                    channel.Register(deleteOptions);
+
+                    channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, async (sender, change) =>
                     {
                         await RefreshOnlineUsersAsync();
                     });
-                    await channel.Subscribe();
 
-                    await RefreshOnlineUsersAsync();
+                    channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Deletes, async (sender, change) =>
+                    {
+                        await RefreshOnlineUsersAsync();
+                    });
+
+                    await channel.Subscribe();
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"Error setting up online users listener: {ex.Message}");
+                    Console.WriteLine($"Error: {ex.Message}");
                 }
-
-
             }
             public async Task RefreshOnlineUsersAsync()
             {
