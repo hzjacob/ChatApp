@@ -39,7 +39,8 @@
             private System.Timers.Timer? _typingTimer;
             public string? Token {get; set;}
             public string? RefreshToken{get; set;}
-            private TaskCompletionSource<bool> _initialSyncReceived = new();
+            private Supabase.Realtime.RealtimeChannel? _channel;
+            private System.Timers.Timer? _presenceTimer;
 
             protected override async Task OnInitializedAsync()
             {
@@ -52,10 +53,15 @@
                         Navigation.NavigateTo("/");
                         return;
                 }
+                
                 await SupabaseClient.Realtime.ConnectAsync();
                 await LoadMessagesAsync();
-                await SetupRealtimeAsync();
+                await SetupRealtimeAsync();                
+                await OnlineUsersAsync();
                 await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
+
+                StartHeartbeatTimer();
+
             }
             protected override async Task OnAfterRenderAsync(bool firstRender)
             {
@@ -142,95 +148,59 @@
             }
             private async Task SetupRealtimeAsync()
             {
-
-                var channel = SupabaseClient.Realtime.Channel("public-messages");
-
-                var presenceKey = Guid.NewGuid().ToString();
-
-                var presence = channel.Register<PresenceUser>(presenceKey);
-
-                
-
-                presence.AddPresenceEventHandler(Supabase.Realtime.Interfaces.IRealtimePresence.EventType.Sync, (sender, type) =>
+                try
                 {
-                    // Get the latest snapshot of who is online
-                    _presenceCts?.Cancel();
-                    _presenceCts = new CancellationTokenSource();
-                    var token = _presenceCts.Token;
+                    _channel = SupabaseClient.Realtime.Channel("public-messages");
 
-                    Task.Delay(300, token).ContinueWith(t =>
+                    var presenceKey = CurrentUser ?? Guid.NewGuid().ToString();
+                    var initialSyncTcs = new TaskCompletionSource<bool>();
+
+                    // Setup message changes listener
+                    _channel.Register(new PostgresChangesOptions("public", "messages", eventType: PostgresChangesOptions.ListenType.Inserts));
+
+                    _channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, async (sender, change) =>
                     {
-                        if(t.IsCompletedSuccessfully && !token.IsCancellationRequested)
+                        var data = change.Model<Message>();
+
+                        if(data == null)
                         {
-                            InvokeAsync(() =>
-                            {
-                                // Flatten the dictionary and grab unique usernames
-                                var state = presence.CurrentState;
-
-                                Console.WriteLine($"state:{state.Count} ");
-                                OnlineUsers = state.Values
-                                    .SelectMany(x => x)
-                                    .Select(u => u.Username)
-                                    .Distinct()
-                                    .ToList();
-
-                                StateHasChanged();
-
-                                _initialSyncReceived.TrySetResult(true);
-                            });
+                            Console.WriteLine("Data is null");
+                            return;
                         }
-                    }, token);
 
-                });
-                channel.Register(new PostgresChangesOptions("public", "messages", eventType: PostgresChangesOptions.ListenType.Inserts));
-
-            channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, async (sender, change) =>
-            {
-                var data = change.Model<Message>();
-
-                if(data == null)
-                {
-                    Console.WriteLine("Data is null");
-                }
-
-                if (data != null)
-                {
-                    await InvokeAsync(async () =>
-                    {
-                        var displayMessage = new MessageDTO
+                        await InvokeAsync(async () =>
                         {
-                            Id = data.Id,
-                            Username = data.Username,
-                            Content = data.Content,
-                            CreatedAt = data.CreatedAt,
-                            SendTo = data.SendTo,
-                            RoomId = data.RoomId
-                        };
+                            var displayMessage = new MessageDTO
+                            {
+                                Id = data.Id,
+                                Username = data.Username,
+                                Content = data.Content,
+                                CreatedAt = data.CreatedAt,
+                                SendTo = data.SendTo,
+                                RoomId = data.RoomId
+                            };
 
-                        Messages = Messages.Append(displayMessage).ToList();
+                            Messages = Messages.Append(displayMessage).ToList();
+                            StateHasChanged();
 
-                        StateHasChanged();
-
-                        await Task.Delay(50);
-                        await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
-                    });
-                }
-            });
-                
-                await channel.Subscribe();
-
-                await Task.WhenAny(_initialSyncReceived.Task, Task.Delay(3000));
-
-                if (channel.State == Supabase.Realtime.Constants.ChannelState.Joined)
-                    {
-                        presence.Track(new PresenceUser 
-                        { 
-                            Username = CurrentUser ?? "Anonymous", 
-                            OnlineAt = DateTime.Now,
-                            SessionId = presenceKey
+                            await Task.Delay(50);
+                            await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
                         });
-                    }
+                    });
+                    
+                    // Subscribe to channel
+                    await _channel.Subscribe();
+
+                    // Track user presence AFTER subscription + initial sync wait
+                    // Force one immediate rebuild from the latest state.
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error in SetupRealtimeAsync: {ex.Message}");
+                    throw;
+                }
             }
+            
             public async Task SendMessageAsync()
             {
                 if (string.IsNullOrWhiteSpace(NewMessage) || _isSending)
@@ -312,23 +282,85 @@
             {
                 try 
                 {
-                    var channel = SupabaseClient.Realtime.Channel("public-messages");
-                    if (channel != null)
+                    if (_channel != null)
                     {
-                        channel.Unsubscribe();
-                        SupabaseClient.Realtime.Remove(channel); 
+                        _channel.Unsubscribe();
+                        SupabaseClient.Realtime.Remove(_channel);
                     }
 
                     SupabaseClient.Realtime.Disconnect();
-
-                    _presenceCts?.Cancel();
-                    _presenceCts?.Dispose();
-                    
-                    Console.WriteLine("Chat component cleaned up and channel removed.");
                 }
                 catch (Exception ex)
                 {
                     Console.WriteLine($"Error during disposal: {ex.Message}");
+                }
+            }
+            public async Task OnlineUsersAsync()
+            {
+                try
+                {
+                    var channel = SupabaseClient.Realtime.Channel("online");
+                    channel.Register(new PostgresChangesOptions("public", "online_users", eventType: PostgresChangesOptions.ListenType.All));
+                    channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.All, async (sender, change) =>
+                    {
+                        await RefreshOnlineUsersAsync();
+                    });
+                    await channel.Subscribe();
+
+                    await RefreshOnlineUsersAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error setting up online users listener: {ex.Message}");
+                }
+
+
+            }
+            public async Task RefreshOnlineUsersAsync()
+            {
+                try
+                {
+                    var client = ClientFactory.CreateClient("ChatAppAPI");
+                    client.DefaultRequestHeaders.Authorization = 
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
+
+                    var response = await client.GetFromJsonAsync<List<Models.PresenceDTO>>("api/presence/online");
+
+                    if (response != null)
+                    {
+                        OnlineUsers = response.Select(u => u.Username).ToList();
+                        StateHasChanged();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error fetching online users: {ex.Message}");
+                }
+            }
+            private void StartHeartbeatTimer()
+            {
+                _presenceTimer = new System.Timers.Timer(30000); // 30 seconds
+                _presenceTimer.Elapsed += async (sender, e) => await SendHeartbeat();
+                _presenceTimer.AutoReset = true;
+                _presenceTimer.Enabled = true;
+                
+                // Send first heartbeat immediately
+                _ = SendHeartbeat(); 
+            }
+
+            private async Task SendHeartbeat()
+            {
+                try
+                {
+                    var client = ClientFactory.CreateClient("ChatAppAPI");
+                    client.DefaultRequestHeaders.Authorization = 
+                        new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
+                    
+                    await client.PostAsync("api/presence/heartbeat", null);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Heartbeat error: {ex.Message}");
                 }
             }
             [JSInvokable] 

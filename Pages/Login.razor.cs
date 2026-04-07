@@ -47,7 +47,6 @@ namespace ChatApp.Pages
                         await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "username", response.Username);
                     }
 
-
                     Navigation.NavigateTo("/chat");
                     Console.WriteLine(response.RefreshToken);
                 }
