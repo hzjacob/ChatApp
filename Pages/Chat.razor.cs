@@ -40,6 +40,7 @@
             public string? Token {get; set;}
             public string? RefreshToken{get; set;}
             private Supabase.Realtime.RealtimeChannel? _channel;
+            private Supabase.Realtime.RealtimeChannel? _presenceChannel;
             private System.Timers.Timer? _presenceTimer;
 
             protected override async Task OnInitializedAsync()
@@ -57,10 +58,18 @@
                 await SupabaseClient.Realtime.ConnectAsync();
                 await LoadMessagesAsync();
                 await SetupRealtimeAsync();                
+                
                 await OnlineUsersAsync();
+
+                await SendHeartbeat(); // Send an immediate heartbeat on load
+              
+                StartHeartbeatTimer(skipFirst: true); // Start the timer for subsequent heartbeats
+                
+                await Task.Delay(100); // Ensure UI has rendered before scrolling
+                await RefreshOnlineUsersAsync();
+
                 await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
 
-                StartHeartbeatTimer();
 
             }
             protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -299,7 +308,7 @@
             {
                 try
                 {
-                    var channel = SupabaseClient.Realtime.Channel("online-presence-only");
+                    _presenceChannel = SupabaseClient.Realtime.Channel("online-presence-only");
 
                     // 1. Listen ONLY for brand new people joining
                     var insertOptions = new PostgresChangesOptions("public", "online_users", 
@@ -309,20 +318,20 @@
                     var deleteOptions = new PostgresChangesOptions("public", "online_users", 
                         eventType: PostgresChangesOptions.ListenType.Deletes);
 
-                    channel.Register(insertOptions);
-                    channel.Register(deleteOptions);
+                    _presenceChannel.Register(insertOptions);
+                    _presenceChannel.Register(deleteOptions);
 
-                    channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, async (sender, change) =>
+                    _presenceChannel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Inserts, async (sender, change) =>
                     {
                         await RefreshOnlineUsersAsync();
                     });
 
-                    channel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Deletes, async (sender, change) =>
+                    _presenceChannel.AddPostgresChangeHandler(PostgresChangesOptions.ListenType.Deletes, async (sender, change) =>
                     {
                         await RefreshOnlineUsersAsync();
                     });
 
-                    await channel.Subscribe();
+                    await _presenceChannel.Subscribe();
                 }
                 catch (Exception ex)
                 {
@@ -350,15 +359,17 @@
                     Console.WriteLine($"Error fetching online users: {ex.Message}");
                 }
             }
-            private void StartHeartbeatTimer()
+            private void StartHeartbeatTimer(bool skipFirst = false)
             {
                 _presenceTimer = new System.Timers.Timer(30000); // 30 seconds
                 _presenceTimer.Elapsed += async (sender, e) => await SendHeartbeat();
                 _presenceTimer.AutoReset = true;
                 _presenceTimer.Enabled = true;
-                
-                // Send first heartbeat immediately
-                _ = SendHeartbeat(); 
+
+                if(!skipFirst)
+                {
+                    SendHeartbeat().ConfigureAwait(false);
+                }
             }
 
             private async Task SendHeartbeat()
@@ -370,6 +381,7 @@
                         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
                     
                     await client.PostAsync("api/presence/heartbeat", null);
+                    Console.WriteLine($"Heartbeat sent at {DateTime.Now} for user {CurrentUser}");
                 }
                 catch (Exception ex)
                 {
