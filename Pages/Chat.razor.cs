@@ -25,7 +25,7 @@
             protected List<MessageDTO> Messages { get; set; } = new();
             protected string NewMessage { get; set; } = "";
             protected ElementReference chatMessages;
-            public List<string> OnlineUsers { get; set; } = new();
+            public List<UserDto> OnlineUsers { get; set; } = new();
 
             public bool _shouldPreventDefault = false;
             public bool _isSending = false;
@@ -42,19 +42,27 @@
             private Supabase.Realtime.RealtimeChannel? _channel;
             private Supabase.Realtime.RealtimeChannel? _presenceChannel;
             private System.Timers.Timer? _presenceTimer;
+            protected string? SelectedPrivateUser {get; set;} = null;
+            protected string? CurrentRoomId {get; set;} = null;
+            private int CurrentUserId {get; set;} = "public-messages".GetHashCode(); // Default to global chat ID
+            private UserDto? globalChatUser = new UserDto { Id = 0, Username = "Global Chat", User_email = "", Password = "" };
+            private int sendToId = 0;
+
 
             protected override async Task OnInitializedAsync()
             {
                 RefreshToken = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "refreshToken");
                 CurrentUser = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", "username");
                 Token = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
+                CurrentUserId = int.Parse(await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", "userId"));
 
                 if (string.IsNullOrEmpty(CurrentUser) || string.IsNullOrEmpty(Token))
                 {
                         Navigation.NavigateTo("/");
                         return;
                 }
-                
+                CurrentRoomId = "public-messages";
+
                 await SupabaseClient.Realtime.ConnectAsync();
                 await LoadMessagesAsync();
                 await SetupRealtimeAsync();                
@@ -63,12 +71,14 @@
 
                 await SendHeartbeat(); // Send an immediate heartbeat on load
               
-                StartHeartbeatTimer(skipFirst: true); // Start the timer for subsequent heartbeats
+                StartHeartbeatTimer(skipFirst: true); // Start the timer
                 
-                await Task.Delay(100); // Ensure UI has rendered before scrolling
+                await Task.Delay(100);
+                
                 await RefreshOnlineUsersAsync();
 
                 await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
+
 
 
             }
@@ -92,8 +102,8 @@
                 {
                     _isLoadingOlder = true;
                 }
-
-                var url = $"api/message/paged?currentOffset={currentOffset}&messagePagesize={messagePageSize}";
+                Console.WriteLine($"Loading messages for Room: {CurrentRoomId}, Offset: {currentOffset}, PageSize: {messagePageSize}");
+                var url = $"api/message/paged?currentOffset={currentOffset}&messagePagesize={messagePageSize}&roomId={CurrentRoomId}";
 
                 var client = ClientFactory.CreateClient("ChatAppAPI");
                 client.DefaultRequestHeaders.Authorization = 
@@ -229,8 +239,9 @@
                         Username = CurrentUser ?? "Anonymous",
                         Content = messageText,
                         CreatedAt = DateTime.UtcNow,
-                        SendTo = null,
-                        RoomId = null
+                        SendTo = sendToId,
+                        RoomId = CurrentRoomId,
+                        SenderId = CurrentUserId
                     };
 
                     var client = ClientFactory.CreateClient("ChatAppAPI");
@@ -346,11 +357,11 @@
                     client.DefaultRequestHeaders.Authorization = 
                         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
 
-                    var response = await client.GetFromJsonAsync<List<Models.PresenceDTO>>("api/presence/online");
+                    var response = await client.GetFromJsonAsync<List<UserDto>>("api/presence/online");
 
                     if (response != null)
                     {
-                        OnlineUsers = response.Select(u => u.Username).ToList();
+                        OnlineUsers = response.OrderByDescending(u => u.LastSeen).ToList();
                         StateHasChanged();
                     }
                 }
@@ -388,6 +399,47 @@
                     Console.WriteLine($"Heartbeat error: {ex.Message}");
                 }
             }
+            private async Task SelectedGlobalChat()
+            {
+                SelectedPrivateUser = null;
+                CurrentRoomId = "public-messages";
+                await LoadMessagesAsync();
+            }
+            public async Task OpenPrivateChat(UserDto targetUser)
+            {
+                if (targetUser.Username == CurrentUser)
+                {
+                    Snackbar.Add("You cannot chat with yourself!", Severity.Warning);
+                    return;
+                }
+                SelectedPrivateUser = targetUser.Id.ToString();
+                CurrentRoomId = $"private-{Math.Min(CurrentUserId, targetUser.Id)}-{Math.Max(CurrentUserId, targetUser.Id)}";
+                await LoadMessagesAsync();
+            }
+            public async Task ViewProfile(UserDto user)
+            {
+                Snackbar.Add($"Viewing profile for {user.Username} (ID: {user.Id})", Severity.Info);
+                // Implement actual profile viewing logic here
+            }
+            public async Task SelectUserForPrivateChat(UserDto user)
+            {
+                if (user.Username == CurrentUser)
+                {
+                    Snackbar.Add("You cannot chat with yourself!", Severity.Warning);
+                    return;
+                }
+                SelectedPrivateUser = user.Id.ToString();
+                CurrentRoomId = $"{Math.Min(CurrentUserId, user.Id)}-{Math.Max(CurrentUserId, user.Id)}";
+                sendToId = user.Id;
+                await LoadMessagesAsync();
+            }
+            public async Task SelectGlobalChat()
+            {
+                SelectedPrivateUser = null;
+                CurrentRoomId = "public-messages";
+                await LoadMessagesAsync();
+                sendToId = 0;
+            }
             [JSInvokable] 
             public void OnChatScroll(bool atTop) 
             {
@@ -399,5 +451,6 @@
                     StateHasChanged(); 
                 }
             }
+
         }
     }

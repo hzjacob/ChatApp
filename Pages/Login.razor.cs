@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using MudBlazor;
 using MudBlazor.Services;
+using ChatApp.Models;
 
 namespace ChatApp.Pages
 {
@@ -45,6 +46,7 @@ namespace ChatApp.Pages
                         await JSRuntime.InvokeVoidAsync("localStorage.setItem", "refreshToken", response.RefreshToken);
                         await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", response.Token);
                         await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "username", response.Username);
+                        await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "userId", response.Id.ToString());
                     }
 
                     Navigation.NavigateTo("/chat");

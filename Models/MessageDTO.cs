@@ -8,6 +8,7 @@ namespace ChatApp.Models
         public DateTime CreatedAt { get; set; }
         public long? SendTo { get; set; }
         public string? RoomId {get; set;}
+        public int? SenderId {get; set;}
 
     }
 }

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace ChatApp.Pages
+namespace ChatApp.Models
 {
     public class UserDto
     {
@@ -11,5 +11,6 @@ namespace ChatApp.Pages
         public string Token {get; set;} = string.Empty;
         public string RefreshToken {get; set;} = string.Empty;
         public DateTime RefreshTokenExpiry {get; set;} 
+        public DateTime LastSeen { get; set; }
     }
 }
