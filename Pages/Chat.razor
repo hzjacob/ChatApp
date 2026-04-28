@@ -12,7 +12,7 @@
                     
                     @* Global Lobby Button *@
                     <MudButton FullWidth="true" 
-                            Variant="@(string.IsNullOrEmpty(SelectedPrivateUser) ? Variant.Filled : Variant.Text)"
+                            Variant="@(SelectedPrivateUser == 0 ? Variant.Filled : Variant.Text)"
                             Color="Color.Primary"
                             StartIcon="@Icons.Material.Filled.Public"
                             OnClick="@SelectGlobalChat"
@@ -25,8 +25,8 @@
                     <MudPaper Elevation="3" Class="pa-4 flex-grow-1" Style="border-radius: 16px; overflow-y: auto;">
                         <MudText Typo="Typo.h6" Class="mb-4">Online (@OnlineUsers.Count)</MudText>
                         
-                        <MudList T="UserDto" Dense="true">
-                            @foreach (UserDto user in OnlineUsers)
+                        <MudList T="PresenceDTO" Dense="true">
+                            @foreach (PresenceDTO user in OnlineUsers)
                             {
                                 <MudListItem>
                                     <ChildContent>

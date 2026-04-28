@@ -25,7 +25,7 @@
             protected List<MessageDTO> Messages { get; set; } = new();
             protected string NewMessage { get; set; } = "";
             protected ElementReference chatMessages;
-            public List<UserDto> OnlineUsers { get; set; } = new();
+            public List<PresenceDTO> OnlineUsers { get; set; } = new();
 
             public bool _shouldPreventDefault = false;
             public bool _isSending = false;
@@ -42,11 +42,11 @@
             private Supabase.Realtime.RealtimeChannel? _channel;
             private Supabase.Realtime.RealtimeChannel? _presenceChannel;
             private System.Timers.Timer? _presenceTimer;
-            protected string? SelectedPrivateUser {get; set;} = null;
-            protected string? CurrentRoomId {get; set;} = null;
-            private int CurrentUserId {get; set;} = "public-messages".GetHashCode(); // Default to global chat ID
-            private UserDto? globalChatUser = new UserDto { Id = 0, Username = "Global Chat", User_email = "", Password = "" };
-            private int sendToId = 0;
+            public long SelectedPrivateUser {get; set;}
+            protected string? CurrentRoomId {get; set;}
+            private int CurrentUserId {get; set;} // Default to global chat ID
+            private PresenceDTO? globalChatUser = new PresenceDTO { UserId = 0, Username = "Global Chat", LastSeen = DateTime.UtcNow };
+            private long sendToId = 0;
 
 
             protected override async Task OnInitializedAsync()
@@ -169,7 +169,15 @@
             {
                 try
                 {
-                    _channel = SupabaseClient.Realtime.Channel("public-messages");
+                    // Unsubscribe from the previous channel if it exists
+                    if (_channel != null)
+                    {
+                        _channel.Unsubscribe();
+                        SupabaseClient.Realtime.Remove(_channel);
+                        _channel = null;
+                    }
+
+                    _channel = SupabaseClient.Realtime.Channel(CurrentRoomId);
 
                     var presenceKey = CurrentUser ?? Guid.NewGuid().ToString();
                     var initialSyncTcs = new TaskCompletionSource<bool>();
@@ -181,9 +189,8 @@
                     {
                         var data = change.Model<Message>();
 
-                        if(data == null)
+                        if(data == null || data.RoomId != CurrentRoomId)
                         {
-                            Console.WriteLine("Data is null");
                             return;
                         }
 
@@ -357,7 +364,7 @@
                     client.DefaultRequestHeaders.Authorization = 
                         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
 
-                    var response = await client.GetFromJsonAsync<List<UserDto>>("api/presence/online");
+                    var response = await client.GetFromJsonAsync<List<PresenceDTO>>("api/presence/online");
 
                     if (response != null)
                     {
@@ -401,44 +408,39 @@
             }
             private async Task SelectedGlobalChat()
             {
-                SelectedPrivateUser = null;
+                SelectedPrivateUser = 0;
                 CurrentRoomId = "public-messages";
                 await LoadMessagesAsync();
             }
-            public async Task OpenPrivateChat(UserDto targetUser)
+            public async Task OpenPrivateChat(PresenceDTO targetUser)
             {
                 if (targetUser.Username == CurrentUser)
                 {
                     Snackbar.Add("You cannot chat with yourself!", Severity.Warning);
                     return;
                 }
-                SelectedPrivateUser = targetUser.Id.ToString();
-                CurrentRoomId = $"private-{Math.Min(CurrentUserId, targetUser.Id)}-{Math.Max(CurrentUserId, targetUser.Id)}";
+                sendToId = targetUser.UserId;
+                SelectedPrivateUser = targetUser.UserId;
+                CurrentRoomId = $"private-{Math.Min(CurrentUserId, targetUser.UserId)}-{Math.Max(CurrentUserId, targetUser.UserId)}";
+                await SetupRealtimeAsync();
                 await LoadMessagesAsync();
+                Console.WriteLine($"Opened private chat with {targetUser.UserId} {targetUser.Username} in room {CurrentRoomId}");
+
             }
-            public async Task ViewProfile(UserDto user)
+            public async Task ViewProfile(PresenceDTO user)
             {
-                Snackbar.Add($"Viewing profile for {user.Username} (ID: {user.Id})", Severity.Info);
+                Snackbar.Add($"Viewing profile for {user.Username} (ID: {user.UserId})", Severity.Info);
                 // Implement actual profile viewing logic here
-            }
-            public async Task SelectUserForPrivateChat(UserDto user)
-            {
-                if (user.Username == CurrentUser)
-                {
-                    Snackbar.Add("You cannot chat with yourself!", Severity.Warning);
-                    return;
-                }
-                SelectedPrivateUser = user.Id.ToString();
-                CurrentRoomId = $"{Math.Min(CurrentUserId, user.Id)}-{Math.Max(CurrentUserId, user.Id)}";
-                sendToId = user.Id;
-                await LoadMessagesAsync();
             }
             public async Task SelectGlobalChat()
             {
-                SelectedPrivateUser = null;
+                SelectedPrivateUser = 0;
                 CurrentRoomId = "public-messages";
                 await LoadMessagesAsync();
                 sendToId = 0;
+                await SetupRealtimeAsync();
+                await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
+
             }
             [JSInvokable] 
             public void OnChatScroll(bool atTop) 
