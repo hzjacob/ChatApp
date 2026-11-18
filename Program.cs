@@ -15,7 +15,7 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddHttpClient("ChatAppAPI", client =>
 {
-    client.BaseAddress = new Uri("http://localhost:5145");
+    client.BaseAddress = new Uri("https://chatapptest.fly.dev");
 });
 builder.Services.AddMudServices();
 builder.Services.AddScoped<ChatApp.Services.States>();

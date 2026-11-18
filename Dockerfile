@@ -2,7 +2,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 COPY . .
-RUN dotnet publish -c Release -o /app
+RUN dotnet publish ChatApp.csproj -c Release -o /app
 
 # Stage 2: Serve the app using Nginx
 FROM nginx:alpine

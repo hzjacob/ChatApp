@@ -29,43 +29,53 @@ namespace ChatApp.Pages
             _loading = true;
             try
             {
-                var loginUser = new 
+                var loginUser = new
                 {
                     User_email = email,
                     Password = password
                 };
                 var client = ClientFactory.CreateClient("ChatAppAPI");
 
-                var request = await client.PostAsJsonAsync("api/users/login", loginUser);
+                var result = await client.PostAsJsonAsync("api/users/login", loginUser);
 
-                if (request.IsSuccessStatusCode)
+                if (result.StatusCode == System.Net.HttpStatusCode.Unauthorized)
                 {
-                    var response = await request.Content.ReadFromJsonAsync<UserDto>();
-                    if(response.Token != null)
-                    {
-                        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "refreshToken", response.RefreshToken);
-                        await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", response.Token);
-                        await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "username", response.Username);
-                        await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "userId", response.Id.ToString());
-                    }
-
-                    Navigation.NavigateTo("/chat");
-                    Console.WriteLine(response.RefreshToken);
+                    Snackbar.Add("Invalid email or password.", Severity.Error);
+                    return;
                 }
-                else
+                if (!result.IsSuccessStatusCode)
                 {
-                    Navigation.NavigateTo("/");
+                    Snackbar.Add("Login failed. Please try again later.", Severity.Error);
+                    return;
                 }
 
+                var user = await result.Content.ReadFromJsonAsync<UserDto>();
+                if (user == null || string.IsNullOrEmpty(user.Token))
+                {
+                    Snackbar.Add("Login failed: no token received.", Severity.Error);
+                    return;
+                }
+
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "authToken", user.Token);
+                await JSRuntime.InvokeVoidAsync("localStorage.setItem", "refreshToken", user.RefreshToken);
+                await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "username", user.Username);
+                await JSRuntime.InvokeVoidAsync("sessionStorage.setItem", "userId", user.Id.ToString());
+
+                Navigation.NavigateTo("/chat");
             }
-            catch(Exception ex)
+            catch (HttpRequestException)
+            {
+                Snackbar.Add("Can't reach the server. Check your connection.", Severity.Error);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex);
+                Snackbar.Add("Something went wrong. Please try again.", Severity.Error);
+            }
+            finally
             {
                 _loading = false;
-                Snackbar.Add(ex.Message, Severity.Error);
             }
-
-            
-
         }
         private async Task HandleKeyPress(KeyboardEventArgs e)
         {

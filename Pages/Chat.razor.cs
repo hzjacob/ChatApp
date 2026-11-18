@@ -54,13 +54,15 @@
                 RefreshToken = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "refreshToken");
                 CurrentUser = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", "username");
                 Token = await JSRuntime.InvokeAsync<string?>("localStorage.getItem", "authToken");
-                CurrentUserId = int.Parse(await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", "userId"));
+                var userIdStr = await JSRuntime.InvokeAsync<string?>("sessionStorage.getItem", "userId");
 
-                if (string.IsNullOrEmpty(CurrentUser) || string.IsNullOrEmpty(Token))
+                if (string.IsNullOrEmpty(CurrentUser) || string.IsNullOrEmpty(Token)
+                    || !int.TryParse(userIdStr, out var userId))
                 {
                         Navigation.NavigateTo("/");
                         return;
                 }
+                CurrentUserId = userId;
                 CurrentRoomId = "public-messages";
 
                 await SupabaseClient.Realtime.ConnectAsync();
@@ -222,8 +224,10 @@
                 }
                 catch (Exception ex)
                 {
+                    // Don't rethrow: a Realtime failure shouldn't take down the whole page.
+                    // Messages still load and send over the API; only live updates are lost.
                     Console.WriteLine($"Error in SetupRealtimeAsync: {ex.Message}");
-                    throw;
+                    Snackbar.Add("Live updates are unavailable right now. Refresh to see new messages.", Severity.Warning);
                 }
             }
             

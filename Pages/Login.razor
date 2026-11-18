@@ -43,7 +43,6 @@
                    Size="Size.Large"
                    OnClick="@HandleLogin"
                    Disabled="@_loading"
-                   Loading="@_loading"
                    Style="height: 50px; font-weight: bold;">
             @(_loading ? "Authenticating..." : "Login")
         </MudButton>
