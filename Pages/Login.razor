@@ -1,55 +1,79 @@
 @page "/login"
 @namespace ChatApp.Pages
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
-    <MudPaper Elevation="4" Class="pa-8" Style="position: relative; overflow: hidden; border-radius: 16px;">
-        
-        @* 1. Top Loading Bar: Appears only when logging in *@
+
+<PageTitle>Login - ChatApp</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-12 mb-8">
+    <MudPaper Elevation="4" Class="pa-8 auth-card">
+
+        @* Top loading bar while authenticating *@
         @if (_loading)
         {
-            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Style="position:absolute; top:0; left:0;" />
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="auth-progress" />
         }
 
-        @* 2. Your Logo: Centered and sized *@
-        <div class="d-flex justify-center mb-6">
-            <img src="images/logo.png" alt="ChatApp Logo" style="height: 120px; width: auto; object-fit: contain;" />
+        <div class="d-flex justify-center mb-4">
+            <AppLogo Height="96" />
         </div>
-        @* 3. Input Fields *@
-        <MudTextField @bind-Value="email" 
-                      Label="Email" 
-                      Variant="Variant.Outlined" 
-                      FullWidth="true" 
-                      Class="mb-4" 
-                      Immediate="true"
-                      Disabled="@_loading"
-                      OnKeyDown="@HandleKeyPress"/>
 
-        <MudTextField @bind-Value="password" 
-                    Label="Password" 
-                    Variant="Variant.Outlined" 
-                    FullWidth="true" 
-                    InputType="@PasswordInput"
-                    Class="mb-6" 
-                    Immediate="true"
-                    Disabled="@_loading"
-                    OnKeyDown="@HandleKeyPress"
-                    Adornment="Adornment.End" 
-                    AdornmentIcon="@PasswordInputIcon"
-                    OnAdornmentClick="TogglePasswordVisibility" />
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="fw-bold">Welcome back</MudText>
+        <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary mb-6">
+            Sign in to continue chatting
+        </MudText>
 
-        @* 4. The Action Button with Loading Spinner *@
-        <MudButton Variant="Variant.Filled" 
-                   Color="Color.Primary" 
-                   FullWidth="true" 
+        <MudForm @ref="_form" @bind-IsValid="_isValid">
+            <MudTextField @bind-Value="email"
+                          Label="Email"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Email"
+                          FullWidth="true"
+                          Class="mb-4"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="Email is required."
+                          Validation="@(new Func<string?, string?>(ValidateEmail))"
+                          Disabled="@_loading"
+                          OnKeyDown="@HandleKeyPress" />
+
+            <MudTextField @bind-Value="password"
+                          Label="Password"
+                          Variant="Variant.Outlined"
+                          InputType="@PasswordInput"
+                          FullWidth="true"
+                          Class="mb-6"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="Password is required."
+                          Disabled="@_loading"
+                          OnKeyDown="@HandleKeyPress"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@PasswordInputIcon"
+                          AdornmentAriaLabel="Show or hide password"
+                          OnAdornmentClick="TogglePasswordVisibility" />
+        </MudForm>
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   FullWidth="true"
                    Size="Size.Large"
                    OnClick="@HandleLogin"
                    Disabled="@_loading"
-                   Style="height: 50px; font-weight: bold;">
-            @(_loading ? "Authenticating..." : "Login")
+                   Class="auth-button">
+            @if (_loading)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-3" />
+                <span>Signing in...</span>
+            }
+            else
+            {
+                <span>Login</span>
+            }
         </MudButton>
 
-        @* 5. Footer Navigation *@
-        <div class="d-flex justify-center mt-6">
-            <MudText Typo="Typo.body2" Class="mr-2 mt-1">Don't have an account?</MudText>
+        <div class="d-flex justify-center align-center mt-6">
+            <MudText Typo="Typo.body2" Class="mr-1">Don't have an account?</MudText>
             <MudButton Variant="Variant.Text"
                        Color="Color.Secondary"
                        OnClick="@GoToRegister"

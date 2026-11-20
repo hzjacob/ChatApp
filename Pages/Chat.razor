@@ -4,92 +4,48 @@
 @inherits ChatBase
 @implements IAsyncDisposable
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16 pb-8">
+@* Mobile: slide-out drawer with the user list *@
+<MudDrawer @bind-Open="_drawerOpen" Variant="@DrawerVariant.Temporary" Anchor="Anchor.Start" Elevation="2" Class="chat-drawer">
+    <div class="pa-3 h-100">@Sidebar</div>
+</MudDrawer>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mt-16 pb-8 chat-page">
     <MudGrid Justify="Justify.Center">
-            @* Left Sidebar - Active Users/Rooms *@
+            @* Left Sidebar - Active Users/Rooms (desktop) *@
             <MudItem xs="12" sm="3" Class="d-none d-sm-block">
-                <div class="d-flex flex-column" style="height: 80vh;">
-                    
-                    @* Global Lobby Button *@
-                    <MudButton FullWidth="true" 
-                            Variant="@(SelectedPrivateUser == 0 ? Variant.Filled : Variant.Text)"
-                            Color="Color.Primary"
-                            StartIcon="@Icons.Material.Filled.Public"
-                            OnClick="@SelectGlobalChat"
-                            Class="mb-2"
-                            Style="border-radius: 12px; min-height: 48px;">
-                        Global Lobby
-                    </MudButton>
-
-                    @* Scrollable Container *@
-                    <MudPaper Elevation="3" Class="pa-4 flex-grow-1" Style="border-radius: 16px; overflow-y: auto;">
-                        <MudText Typo="Typo.h6" Class="mb-4">Online (@OnlineUsers.Count)</MudText>
-                        
-                        <MudList T="PresenceDTO" Dense="true">
-                            @foreach (PresenceDTO user in OnlineUsers)
-                            {
-                                <MudListItem>
-                                    <ChildContent>
-                                        <div class="d-flex align-center justify-space-between w-100">
-                                            @* User Icon and Name *@
-                                            <div class="d-flex align-center">
-                                                <MudIcon Icon="@Icons.Material.Filled.Circle" 
-                                                        Size="Size.Small"
-                                                        Color="@(user.Username == CurrentUser ? Color.Primary : Color.Success)" 
-                                                        Class="mr-3"/>
-                                                <MudText Typo="Typo.body2">
-                                                    @user.Username @(user.Username == CurrentUser ? "(You)" : "")
-                                                </MudText>
-                                            </div>
-
-                                            @* The Menu Button *@
-                                            <MudMenu Icon="@Icons.Material.Filled.MoreVert" 
-                                                    Size="Size.Small" 
-                                                    Dense="true"
-                                                    FixedPlacement="true"
-                                                    AnchorOrigin="Origin.BottomRight"
-                                                    TransformOrigin="Origin.TopRight">
-                                                <MudMenuItem Icon="@Icons.Material.Filled.Person" 
-                                                            OnClick="@(() => ViewProfile(user))">View Profile</MudMenuItem>
-                                                @if (user.Username != CurrentUser)
-                                                {
-                                                    <MudMenuItem Icon="@Icons.Material.Filled.Chat" 
-                                                                OnClick="@(() => OpenPrivateChat(user))">Message</MudMenuItem>
-                                                }
-                                            </MudMenu>
-                                        </div>
-                                    </ChildContent>
-                                </MudListItem>
-                            }
-                        </MudList>
-                    </MudPaper>
-                </div>
+                <div style="height: 80vh;">@Sidebar</div>
             </MudItem>
         @* Right Side - Chat Window *@
         <MudItem xs="12" sm="9">
-            <MudPaper Elevation="3" Class="d-flex flex-column" Style="height: 80vh; border-radius: 16px; overflow: hidden;">
-                
+            <MudPaper Elevation="3" Class="d-flex flex-column chat-pane">
+
                 @* Chat Header *@
                 <MudToolBar Dense="true" Class="mud-theme-primary">
+                    @* Mobile only: open user list *@
+                    <MudIconButton Icon="@Icons.Material.Filled.People"
+                                   Color="Color.Inherit"
+                                   Class="d-flex d-sm-none mr-1"
+                                   aria-label="Online users"
+                                   OnClick="@(() => _drawerOpen = true)" />
                     <MudIcon Icon="@Icons.Material.Filled.ChatBubble" Class="mr-2" />
                     <MudText Typo="Typo.h6">Global Lobby</MudText>
                     <MudSpacer />
                     <MudIconButton Icon="@Icons.Material.Filled.MoreVert" Color="Color.Inherit" />
                     @* Added Logout Button *@
                     <MudTooltip Text="Logout">
-                        <MudIconButton Icon="@Icons.Material.Filled.Logout" 
-                                    Color="Color.Inherit" 
+                        <MudIconButton Icon="@Icons.Material.Filled.Logout"
+                                    Color="Color.Inherit"
                                     OnClick="@HandleLogout" />
                     </MudTooltip>
                 </MudToolBar>
 
                 @* Message List Area *@
-                <MudCardContent Style="flex-grow: 1; overflow-y: auto;" Class="pa-4 bg-light" id="chat-container">
+                <MudCardContent Style="flex-grow: 1; overflow-y: auto; background-color: var(--mud-palette-background-gray);" Class="pa-4 chat-messages" id="chat-container">
                         @if (hasMoreMesssages && _isScrolledToTop)
                         {
                             <div class="d-flex justify-center mb-4">
-                                <MudButton Variant="Variant.Text" 
-                                            Color="Color.Primary" 
+                                <MudButton Variant="Variant.Text"
+                                            Color="Color.Primary"
                                             OnClick="@(() => LoadMessagesAsync(false))"
                                             Disabled = "@_isLoadingOlder"
                                             StartIcon="@(_isLoadingOlder ? null : Icons.Material.Filled.History)">
@@ -101,7 +57,7 @@
                                         {
                                             <MudText>View Older Messages</MudText>
                                         }
-                                    
+
                                 </MudButton>
                             </div>
                         }
@@ -117,10 +73,10 @@
                             {
                                 bool isMe = msg.Username == CurrentUser;
                                 <div class="d-flex @(isMe ? "justify-end" : "justify-start") mb-4">
-                                    <div class="d-flex flex-column @(isMe ? "align-end" : "align-start")" style="max-width: 70%;">
+                                    <div class="d-flex flex-column chat-bubble-wrap @(isMe ? "align-end" : "align-start")">
                                         <MudText Typo="Typo.caption" Class="px-2">@msg.Username • @msg.CreatedAt.ToString("HH:mm")</MudText>
-                                        <MudPaper Elevation="1" 
-                                                Class="@(isMe ? "pa-3 mud-theme-primary" : "pa-3 bg-white")" 
+                                        <MudPaper Elevation="1"
+                                                Class="@(isMe ? "pa-3 mud-theme-primary" : "pa-3")"
                                                 Style="@(isMe ? "border-radius: 15px 15px 0 15px;" : "border-radius: 15px 15px 15px 0;")">
                                             <MudText Typo="Typo.body1" Style="word-wrap: break-word; overflow-wrap: anywhere;" >@msg.Content</MudText>
                                         </MudPaper>
@@ -133,18 +89,18 @@
 
                 @* Sticky Bottom Input *@
                 <MudDivider />
-                <div class="pa-4 bg-white">
+                <div class="pa-4 chat-input" style="background-color: var(--mud-palette-surface);">
                     <MudTextField @bind-Value="NewMessage"
                                   Placeholder="@(_isSending ? "Sending..." : "Write a message...")"
-                                  Variant="Variant.Outlined" 
-                                  Adornment="Adornment.End" 
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.End"
                                   Immediate="true"
-                                  AdornmentIcon="@Icons.Material.Filled.Send" 
+                                  AdornmentIcon="@Icons.Material.Filled.Send"
                                   OnAdornmentClick="SendMessageAsync"
                                   OnkeyDown="@HandleKeyPress"
                                   FullWidth="true"
                                   Margin="Margin.Dense"
-                                  AutoGrow 
+                                  AutoGrow
                                   Lines="1"
                                   MaxLines="5"
                                   KeyDownPreventDefault = "_shouldPreventDefault"
@@ -155,6 +111,68 @@
         </MudItem>
     </MudGrid>
 </MudContainer>
+
+@code {
+    private bool _drawerOpen;
+
+    @* Shared by the desktop sidebar and the mobile drawer *@
+    private RenderFragment Sidebar => @<div class="d-flex flex-column h-100">
+        @* Global Lobby Button *@
+        <MudButton FullWidth="true"
+                Variant="@(SelectedPrivateUser == 0 ? Variant.Filled : Variant.Text)"
+                Color="Color.Primary"
+                StartIcon="@Icons.Material.Filled.Public"
+                OnClick="@(async () => { _drawerOpen = false; await SelectGlobalChat(); })"
+                Class="mb-2"
+                Style="border-radius: 12px; min-height: 48px;">
+            Global Lobby
+        </MudButton>
+
+        @* Scrollable Container *@
+        <MudPaper Elevation="3" Class="pa-4 flex-grow-1" Style="border-radius: 16px; overflow-y: auto;">
+            <MudText Typo="Typo.h6" Class="mb-4">Online (@OnlineUsers.Count)</MudText>
+
+            <MudList T="PresenceDTO" Dense="true">
+                @foreach (PresenceDTO user in OnlineUsers)
+                {
+                    <MudListItem>
+                        <ChildContent>
+                            <div class="d-flex align-center justify-space-between w-100">
+                                @* User Icon and Name *@
+                                <div class="d-flex align-center">
+                                    <MudIcon Icon="@Icons.Material.Filled.Circle"
+                                            Size="Size.Small"
+                                            Color="@(user.Username == CurrentUser ? Color.Primary : Color.Success)"
+                                            Class="mr-3"/>
+                                    <MudText Typo="Typo.body2">
+                                        @user.Username @(user.Username == CurrentUser ? "(You)" : "")
+                                    </MudText>
+                                </div>
+
+                                @* The Menu Button *@
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                        Size="Size.Small"
+                                        Dense="true"
+                                        FixedPlacement="true"
+                                        AnchorOrigin="Origin.BottomRight"
+                                        TransformOrigin="Origin.TopRight">
+                                    <MudMenuItem Icon="@Icons.Material.Filled.Person"
+                                                OnClick="@(() => ViewProfile(user))">View Profile</MudMenuItem>
+                                    @if (user.Username != CurrentUser)
+                                    {
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Chat"
+                                                    OnClick="@(async () => { _drawerOpen = false; await OpenPrivateChat(user); })">Message</MudMenuItem>
+                                    }
+                                </MudMenu>
+                            </div>
+                        </ChildContent>
+                    </MudListItem>
+                }
+            </MudList>
+        </MudPaper>
+    </div>;
+}
+
 <script>
     window.watchChatScrollById = function (id, dotNetHelper) {
         var element = document.getElementById(id);

@@ -4,7 +4,7 @@
 }
 
 ::-webkit-scrollbar-thumb {
-    background: #e0e0e0;
+    background: var(--mud-palette-lines-default);
     border-radius: 10px;
 }
 
@@ -25,4 +25,77 @@ html, body {
     position: fixed;
     width: 100%;
     z-index: 1000;
+}
+/* ---------- Login / Register ---------- */
+.auth-card {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px !important;
+}
+
+.auth-progress {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    right: 0;
+}
+
+.auth-button {
+    height: 50px;
+    font-weight: 700 !important;
+    border-radius: 25px !important;
+}
+
+@media (max-width: 600px) {
+    .auth-card {
+        padding: 24px 16px !important;
+    }
+}
+
+/* ---------- Chat ---------- */
+.chat-pane {
+    height: 80vh;
+    border-radius: 16px !important;
+    overflow: hidden;
+}
+
+.chat-bubble-wrap {
+    max-width: 70%;
+}
+
+.chat-drawer {
+    width: 280px !important;
+}
+
+/* ---------- Chat: phones ---------- */
+@media (max-width: 599.98px) {
+    /* Chat fills the screen under the app bar (56px on mobile) */
+    .chat-pane {
+        position: fixed;
+        top: 56px;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: auto;
+        border-radius: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .chat-page {
+        margin-top: 0 !important;
+        padding: 0 !important;
+    }
+
+    .chat-messages {
+        padding: 12px 8px !important;
+    }
+
+    .chat-bubble-wrap {
+        max-width: 85%;
+    }
+
+    .chat-input {
+        padding: 8px !important;
+        padding-bottom: calc(8px + env(safe-area-inset-bottom)) !important;
+    }
 }

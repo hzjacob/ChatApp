@@ -15,10 +15,11 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 builder.Services.AddHttpClient("ChatAppAPI", client =>
 {
-    client.BaseAddress = new Uri("https://chatapptest.fly.dev");
+    client.BaseAddress = new Uri(builder.Configuration["Api:BaseUrl"] ?? "https://chatapptest.fly.dev");
 });
 builder.Services.AddMudServices();
 builder.Services.AddScoped<ChatApp.Services.States>();
+builder.Services.AddScoped<ChatApp.Services.ThemeService>();
 builder.Services.AddSingleton( provider =>
     new Supabase.Client(supabaseUrl, supabaseKey, new SupabaseOptions
     {

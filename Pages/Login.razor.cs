@@ -1,37 +1,59 @@
+using System.ComponentModel.DataAnnotations;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Components;
-using Microsoft.AspNetCore.Components.Forms;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using MudBlazor;
-using MudBlazor.Services;
 using ChatApp.Models;
 
 namespace ChatApp.Pages
 {
     public partial class Login
     {
+        private MudForm? _form;
+        private bool _isValid;
         private bool _loading;
         private string? email;
         private string? password;
-        bool isShow;
-        string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
-        InputType PasswordInput = InputType.Password;
+        private bool isShow;
+        private string PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
+        private InputType PasswordInput = InputType.Password;
+
+        /// <summary>Pre-fills the email, e.g. after registering (/login?email=...).</summary>
+        [SupplyParameterFromQuery(Name = "email")] public string? PrefillEmail { get; set; }
+
         [Inject] NavigationManager Navigation { get; set; } = null!;
         [Inject] IJSRuntime JSRuntime { get; set; } = null!;
         [Inject] IHttpClientFactory ClientFactory { get; set; } = null!;
-        [Inject] ISnackbar Snackbar {get; set;} = default!;
-        
+        [Inject] ISnackbar Snackbar { get; set; } = default!;
+
+        protected override void OnInitialized()
+        {
+            if (!string.IsNullOrWhiteSpace(PrefillEmail))
+                email = PrefillEmail;
+        }
+
+        internal static string? ValidateEmail(string? value) =>
+            string.IsNullOrWhiteSpace(value) || new EmailAddressAttribute().IsValid(value.Trim())
+                ? null
+                : "Please enter a valid email address.";
+
         private async Task HandleLogin()
         {
-            if(_loading) return;
+            if (_loading) return;
+
+            if (_form != null)
+            {
+                await _form.ValidateAsync();
+                if (!_form.IsValid) return;
+            }
 
             _loading = true;
             try
             {
                 var loginUser = new
                 {
-                    User_email = email,
+                    User_email = email?.Trim(),
                     Password = password
                 };
                 var client = ClientFactory.CreateClient("ChatAppAPI");
@@ -77,31 +99,20 @@ namespace ChatApp.Pages
                 _loading = false;
             }
         }
+
         private async Task HandleKeyPress(KeyboardEventArgs e)
         {
-            if(e.Key == "Enter")
-            {
+            if (e.Key == "Enter")
                 await HandleLogin();
-            }
         }
-        private void GoToRegister()
-        {
-            Navigation.NavigateTo("/register");
-        }
+
+        private void GoToRegister() => Navigation.NavigateTo("/register");
+
         private void TogglePasswordVisibility()
         {
-            if (isShow)
-            {
-                isShow = false;
-                PasswordInputIcon = Icons.Material.Filled.VisibilityOff;
-                PasswordInput = InputType.Password;
-            }
-            else
-            {
-                isShow = true;
-                PasswordInputIcon = Icons.Material.Filled.Visibility;
-                PasswordInput = InputType.Text;
-            }
+            isShow = !isShow;
+            PasswordInputIcon = isShow ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff;
+            PasswordInput = isShow ? InputType.Text : InputType.Password;
         }
     }
 }

@@ -1,56 +1,125 @@
 @page "/register"
 @namespace ChatApp.Pages
-@inject NavigationManager NavigationManager
 
-<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
-    <MudPaper Elevation="4" Class="pa-8">
-        <MudText Typo="Typo.h4" GutterBottom="true" Align="Align.Center">Create Account</MudText>
-        
-        <MudTextField @bind-Value="username" 
-                      Label="Username" 
-                      Variant="Variant.Outlined" 
-                      FullWidth="true" 
-                      Class="mb-4" 
-                      Immediate="true" />
+<PageTitle>Register - ChatApp</PageTitle>
 
-        <MudTextField @bind-Value="email" 
-                      Label="Email" 
-                      Variant="Variant.Outlined" 
-                      FullWidth="true" 
-                      Class="mb-4" 
-                      Immediate="true"
-                      InputType="InputType.Email" />
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-12 mb-8">
+    <MudPaper Elevation="4" Class="pa-8 auth-card">
 
-        <MudTextField @bind-Value="password" 
-                      Label="Password" 
-                      Variant="Variant.Outlined" 
-                      FullWidth="true" 
-                      InputType="InputType.Password"
-                      Class="mb-4" 
-                      Immediate="true" />
+        @if (_loading)
+        {
+            <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="auth-progress" />
+        }
 
-        <MudTextField @bind-Value="confirmPassword" 
-                      Label="Confirm Password" 
-                      Variant="Variant.Outlined" 
-                      FullWidth="true" 
-                      InputType="InputType.Password"
-                      Class="mb-6" 
-                      Immediate="true" />
+        <div class="d-flex justify-center mb-4">
+            <AppLogo Height="80" />
+        </div>
 
-        <MudButton Variant="Variant.Filled" 
-                   Color="Color.Secondary" 
-                   FullWidth="true" 
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="fw-bold">Create your account</MudText>
+        <MudText Typo="Typo.body2" Align="Align.Center" Class="mud-text-secondary mb-6">
+            It only takes a minute
+        </MudText>
+
+        <MudForm @ref="_form" @bind-IsValid="_isValid">
+            <MudTextField @bind-Value="username"
+                          Label="Username"
+                          Variant="Variant.Outlined"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Person"
+                          FullWidth="true"
+                          Class="mb-4"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="Username is required."
+                          MaxLength="@UsernameMaxLength"
+                          Validation="@(new Func<string?, string?>(ValidateUsername))"
+                          Disabled="@_loading"
+                          OnKeyDown="@HandleKeyPress" />
+
+            <MudTextField @bind-Value="email"
+                          Label="Email"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Email"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Email"
+                          FullWidth="true"
+                          Class="mb-4"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="Email is required."
+                          Validation="@(new Func<string?, string?>(ValidateEmail))"
+                          Disabled="@_loading"
+                          OnKeyDown="@HandleKeyPress" />
+
+            <MudTextField @bind-Value="password"
+                          Label="Password"
+                          Variant="Variant.Outlined"
+                          InputType="@PasswordInput"
+                          FullWidth="true"
+                          Class="mb-1"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="Password is required."
+                          Validation="@(new Func<string?, string?>(ValidatePassword))"
+                          HelperText="@($"At least {PasswordMinLength} characters, with a letter and a number")"
+                          Disabled="@_loading"
+                          OnKeyDown="@HandleKeyPress"
+                          Adornment="Adornment.End"
+                          AdornmentIcon="@PasswordInputIcon"
+                          AdornmentAriaLabel="Show or hide password"
+                          OnAdornmentClick="TogglePasswordVisibility" />
+
+            @if (!string.IsNullOrEmpty(password))
+            {
+                <div class="d-flex align-center gap-2 mb-4 px-1">
+                    <MudProgressLinear Value="@StrengthValue" Color="@StrengthColor" Rounded="true" Size="Size.Small" Class="flex-grow-1" />
+                    <MudText Typo="Typo.caption" Style="min-width: 48px; text-align: right;">@StrengthLabel</MudText>
+                </div>
+            }
+            else
+            {
+                <div class="mb-4"></div>
+            }
+
+            <MudTextField @bind-Value="confirmPassword"
+                          Label="Confirm Password"
+                          Variant="Variant.Outlined"
+                          InputType="@PasswordInput"
+                          FullWidth="true"
+                          Class="mb-6"
+                          Immediate="true"
+                          Required="true"
+                          RequiredError="Please confirm your password."
+                          Validation="@(new Func<string?, string?>(ValidateConfirmPassword))"
+                          Disabled="@_loading"
+                          OnKeyDown="@HandleKeyPress" />
+        </MudForm>
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Primary"
+                   FullWidth="true"
                    Size="Size.Large"
-                   OnClick="@HandleRegister">
-            Register
+                   OnClick="@HandleRegister"
+                   Disabled="@_loading"
+                   Class="auth-button">
+            @if (_loading)
+            {
+                <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-3" />
+                <span>Creating account...</span>
+            }
+            else
+            {
+                <span>Register</span>
+            }
         </MudButton>
 
-        <div class="d-flex justify-center mt-6">
-            <MudText Typo="Typo.body2" Class="mr-2 mt-1">Already have an account?</MudText>
-            <MudButton Variant="Variant.Text" 
-                       Color="Color.Primary" 
+        <div class="d-flex justify-center align-center mt-6">
+            <MudText Typo="Typo.body2" Class="mr-1">Already have an account?</MudText>
+            <MudButton Variant="Variant.Text"
+                       Color="Color.Secondary"
                        OnClick="@GoToLogin"
-                       Size="Size.Small">
+                       Size="Size.Small"
+                       Disabled="@_loading">
                 Login
             </MudButton>
         </div>

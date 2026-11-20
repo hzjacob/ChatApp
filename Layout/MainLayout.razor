@@ -1,22 +1,57 @@
 ﻿@using ChatApp.Pages
+@using ChatApp.Services
 @inject ChatApp.Services.States ChatState
+@inject ThemeService ThemeService
 @inherits LayoutComponentBase
+@implements IDisposable
 @inject NavigationManager Nav
 @* Essential providers for styling, dialogs, and notifications *@
-<MudThemeProvider />
+<MudThemeProvider @ref="_themeProvider" Theme="ThemeService.Current?.Theme" IsDarkMode="IsDarkMode" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
 <MudLayout>
     <MudAppBar Elevation="1">
-        <MudLink Href="/" Underline="Underline.None" Class="d-flex align-center">
-        <img src="images/logo.png" 
-             alt="ChatApp Logo" 
-             style="height: 85px; width: auto; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.1)); transition: transform 0.3s ease;" 
-             class="logo-hover" />
-        </MudLink>
+        @if (IsChatPage)
+        {
+            @* Logged in: logo is not a link, so it can't take you out of the chat *@
+            <div class="d-flex align-center">
+                <AppLogo Height="46" OnPrimary="!IsDarkMode" />
+            </div>
+        }
+        else
+        {
+            <MudLink Href="/" Underline="Underline.None" Class="d-flex align-center">
+                <AppLogo Height="46" OnPrimary="!IsDarkMode" Class="logo-hover" />
+            </MudLink>
+        }
         <MudSpacer />
+
+        @* Light / dark / system toggle *@
+        <MudTooltip Text="@ModeTooltip">
+            <MudIconButton Icon="@ModeIcon" Color="Color.Inherit" OnClick="CycleModeAsync" aria-label="@ModeTooltip" />
+        </MudTooltip>
+
+        @* Color theme picker *@
+        <MudMenu Icon="@Icons.Material.Filled.Palette" Color="Color.Inherit" aria-label="Choose theme"
+                 AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+            @foreach (var theme in ThemeService.Themes)
+            {
+                var t = theme;
+                <MudMenuItem OnClick="@(() => ThemeService.SetThemeAsync(t))">
+                    <div class="d-flex align-center gap-3">
+                        <span class="theme-swatch" style="background:@t.Swatch;"></span>
+                        <span>@t.Name</span>
+                        @if (ThemeService.Current?.Key == t.Key)
+                        {
+                            <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" Class="ml-auto" />
+                        }
+                    </div>
+                </MudMenuItem>
+            }
+        </MudMenu>
+
         @if (IsChatPage)
         {
         <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
@@ -27,31 +62,89 @@
         }
     </MudAppBar>
 
-    @* The sidebar (MudDrawer) is deleted from here *@
-
     <MudMainContent Class="pt-4 px-2">
         @Body
     </MudMainContent>
 </MudLayout>
 
 @code {
-    bool _drawerOpen = true;
+    private MudThemeProvider? _themeProvider;
+    private bool _systemIsDark;
+
     private bool IsChatPage => Nav.Uri.EndsWith("/chat")  || Nav.Uri.Contains("/chat/");
 
-    void DrawerToggle() => _drawerOpen = !_drawerOpen;
-
-    protected override void OnInitialized()
+    private bool IsDarkMode => ThemeService.Mode switch
     {
-        Nav.LocationChanged += (s,e) => StateHasChanged();
+        ThemeMode.Dark => true,
+        ThemeMode.Light => false,
+        _ => _systemIsDark
+    };
+
+    private string ModeIcon => ThemeService.Mode switch
+    {
+        ThemeMode.Light => Icons.Material.Filled.LightMode,
+        ThemeMode.Dark => Icons.Material.Filled.DarkMode,
+        _ => Icons.Material.Filled.BrightnessAuto
+    };
+
+    private string ModeTooltip => ThemeService.Mode switch
+    {
+        ThemeMode.Light => "Light mode (click for dark)",
+        ThemeMode.Dark => "Dark mode (click for system)",
+        _ => "System mode (click for light)"
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        ThemeService.Changed += OnThemeChanged;
+        await ThemeService.LoadAsync();
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _themeProvider != null)
+        {
+            _systemIsDark = await _themeProvider.GetSystemDarkModeAsync();
+            await _themeProvider.WatchSystemDarkModeAsync(OnSystemDarkModeChanged);
+            StateHasChanged();
+        }
+    }
+
+    private Task OnSystemDarkModeChanged(bool isDark)
+    {
+        _systemIsDark = isDark;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    private Task CycleModeAsync() => ThemeService.SetModeAsync(ThemeService.Mode switch
+    {
+        ThemeMode.System => ThemeMode.Light,
+        ThemeMode.Light => ThemeMode.Dark,
+        _ => ThemeMode.System
+    });
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => StateHasChanged();
+    private void OnThemeChanged() => InvokeAsync(StateHasChanged);
+
     public void Dispose()
     {
-        Nav.LocationChanged += (s,e) => StateHasChanged();
+        Nav.LocationChanged -= OnLocationChanged;
+        ThemeService.Changed -= OnThemeChanged;
     }
-
 }
 <style>
+    .logo-hover {
+        transition: transform 0.3s ease;
+    }
     .logo-hover:hover {
         transform: scale(1.08);
     }
-</style>    
+    .theme-swatch {
+        display: inline-block;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        border: 2px solid var(--mud-palette-lines-default);
+    }
+</style>

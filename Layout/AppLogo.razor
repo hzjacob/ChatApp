@@ -1,0 +1,49 @@
+@* Theme-aware ChatApp logo. Colors come from the active MudBlazor palette,
+   so it follows both the selected color theme and light/dark mode. *@
+<svg class="app-logo @(OnPrimary ? "app-logo--on-primary" : "") @Class"
+     style="height:@(Height)px; @Style"
+     viewBox="0 0 245 100" role="img" aria-label="ChatApp Logo"
+     xmlns="http://www.w3.org/2000/svg">
+    @* Speech bubble *@
+    <path class="app-logo__bubble"
+          d="M40 10 H78 A36 36 0 0 1 78 82 H50 L20 96 L26 76 A36 36 0 0 1 40 10 Z" />
+    @* Inner pill with typing dots *@
+    <rect class="app-logo__pill" x="24" y="32" width="70" height="28" rx="14" />
+    <circle class="app-logo__dot" cx="42" cy="46" r="6" />
+    <circle class="app-logo__dot" cx="59" cy="46" r="6" />
+    <circle class="app-logo__dot" cx="76" cy="46" r="6" />
+    @* Wordmark *@
+    <text class="app-logo__text" x="126" y="50" font-size="40" font-weight="800">CHAT</text>
+    <rect class="app-logo__text" x="127" y="58" width="108" height="3" rx="1.5" />
+    <text class="app-logo__text" x="126" y="92" font-size="30" font-weight="500">APP</text>
+</svg>
+
+@code {
+    /// <summary>Rendered height in pixels.</summary>
+    [Parameter] public int Height { get; set; } = 48;
+
+    /// <summary>Use when the logo sits on a primary-colored background (e.g. the light-mode app bar).</summary>
+    [Parameter] public bool OnPrimary { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? Style { get; set; }
+}
+
+<style>
+    .app-logo {
+        width: auto;
+        display: block;
+        font-family: var(--mud-typography-default-family, Roboto, sans-serif);
+        filter: drop-shadow(0 4px 6px rgba(0,0,0,0.12));
+    }
+    .app-logo .app-logo__bubble { fill: var(--mud-palette-primary); transition: fill .3s ease; }
+    .app-logo .app-logo__pill   { fill: rgba(0,0,0,0.22); }
+    .app-logo .app-logo__dot    { fill: var(--mud-palette-primary-text); opacity: .9; }
+    .app-logo .app-logo__text   { fill: var(--mud-palette-secondary); transition: fill .3s ease; }
+
+    /* On a primary background: invert the bubble so it stays visible */
+    .app-logo--on-primary .app-logo__bubble { fill: var(--mud-palette-appbar-text); }
+    .app-logo--on-primary .app-logo__pill   { fill: var(--mud-palette-primary); }
+    .app-logo--on-primary .app-logo__dot    { fill: var(--mud-palette-appbar-text); }
+    .app-logo--on-primary .app-logo__text   { fill: var(--mud-palette-appbar-text); }
+</style>
