@@ -5,7 +5,7 @@
 @implements IAsyncDisposable
 
 @* Mobile: slide-out drawer with the user list *@
-<MudDrawer @bind-Open="_drawerOpen" Variant="@DrawerVariant.Temporary" Anchor="Anchor.Start" Elevation="2" Class="chat-drawer">
+<MudDrawer @bind-Open="_drawerOpen" Variant="@DrawerVariant.Temporary" Anchor="Anchor.Start" Elevation="2" Width="280px" Class="chat-drawer d-sm-none">
     <div class="pa-3 h-100">@Sidebar</div>
 </MudDrawer>
 
@@ -73,7 +73,8 @@
                             {
                                 bool isMe = msg.Username == CurrentUser;
                                 <div class="d-flex @(isMe ? "justify-end" : "justify-start") mb-4">
-                                    <div class="d-flex flex-column chat-bubble-wrap @(isMe ? "align-end" : "align-start")">
+                                    <div class="d-flex flex-column chat-bubble-wrap @(isMe ? "align-end" : "align-start")"
+                                         style="@(msg.Id == null ? "opacity: 0.6;" : null)">
                                         <MudText Typo="Typo.caption" Class="px-2">@msg.Username • @msg.CreatedAt.ToString("HH:mm")</MudText>
                                         <MudPaper Elevation="1"
                                                 Class="@(isMe ? "pa-3 mud-theme-primary" : "pa-3")"

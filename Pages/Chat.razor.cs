@@ -47,6 +47,18 @@
             private int CurrentUserId {get; set;} // Default to global chat ID
             private PresenceDTO? globalChatUser = new PresenceDTO { UserId = 0, Username = "Global Chat", LastSeen = DateTime.UtcNow };
             private long sendToId = 0;
+            private DotNetObjectReference<ChatBase>? _dotNetRef;
+
+            // Set when the next render should scroll the chat to the bottom.
+            // Scrolling happens in OnAfterRenderAsync so the new messages are already in the DOM.
+            private bool _scrollToBottomPending;
+            private bool _scrollSmooth;
+
+            protected void RequestScrollToBottom(bool smooth)
+            {
+                _scrollToBottomPending = true;
+                _scrollSmooth = smooth;
+            }
 
 
             protected override async Task OnInitializedAsync()
@@ -65,30 +77,53 @@
                 CurrentUserId = userId;
                 CurrentRoomId = "public-messages";
 
-                await SupabaseClient.Realtime.ConnectAsync();
-                await LoadMessagesAsync();
-                await SetupRealtimeAsync();                
-                
-                await OnlineUsersAsync();
+                // Realtime (websocket connect + two channel subscriptions) is the slow part,
+                // so start it first but don't make the messages / online list wait for it.
+                var realtimeTask = StartRealtimeAsync();
 
-                await SendHeartbeat(); // Send an immediate heartbeat on load
-              
-                StartHeartbeatTimer(skipFirst: true); // Start the timer
-                
-                await Task.Delay(100);
-                
-                await RefreshOnlineUsersAsync();
+                // Messages, online list and heartbeat are independent HTTP calls: run them together.
+                await Task.WhenAll(LoadMessagesAsync(), RefreshOnlineUsersAsync(), SendHeartbeat());
 
-                await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
+                // If this is our first heartbeat the list may have been fetched before our row existed.
+                if (!OnlineUsers.Any(u => u.UserId == CurrentUserId))
+                {
+                    await RefreshOnlineUsersAsync();
+                }
 
+                StartHeartbeatTimer(skipFirst: true);
 
-
+                await realtimeTask;
             }
+
+            private async Task StartRealtimeAsync()
+            {
+                try
+                {
+                    await SupabaseClient.Realtime.ConnectAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Realtime connect failed: {ex.Message}");
+                    Snackbar.Add("Live updates are unavailable right now. Refresh to see new messages.", Severity.Warning);
+                    return;
+                }
+
+                // Both subscriptions wait for Supabase to acknowledge; do them in parallel.
+                await Task.WhenAll(SetupRealtimeAsync(), OnlineUsersAsync());
+            }
+
             protected override async Task OnAfterRenderAsync(bool firstRender)
             {
                 if (firstRender)
                 {
-                        await JSRuntime.InvokeVoidAsync("watchChatScrollById", "chat-container", DotNetObjectReference.Create(this));
+                    _dotNetRef = DotNetObjectReference.Create(this);
+                    await JSRuntime.InvokeVoidAsync("chatHelpers.watchChatScrollById", "chat-container", _dotNetRef);
+                }
+
+                if (_scrollToBottomPending)
+                {
+                    _scrollToBottomPending = false;
+                    await JSRuntime.InvokeVoidAsync("chatHelpers.ScrollToBottom", "chat-container", _scrollSmooth);
                 }
             }
             public async Task LoadMessagesAsync(bool isInitialLoad = true)
@@ -120,9 +155,8 @@
                     if (isInitialLoad)
                     {
                         Messages = newMessage;
-                        StateHasChanged(); // Let UI render first
-                        
-                        // Traditional scroll to bottom for first load
+                        // Jump (no animation) to the bottom as soon as this renders.
+                        RequestScrollToBottom(smooth: false);
                     }
                     else
                     {
@@ -196,23 +230,41 @@
                             return;
                         }
 
-                        await InvokeAsync(async () =>
+                        await InvokeAsync(() =>
                         {
-                            var displayMessage = new MessageDTO
+                            // Already shown (e.g. it came in with the page load).
+                            if (Messages.Any(m => m.Id == data.Id))
                             {
-                                Id = data.Id,
-                                Username = data.Username,
-                                Content = data.Content,
-                                CreatedAt = data.CreatedAt,
-                                SendTo = data.SendTo,
-                                RoomId = data.RoomId
-                            };
+                                return;
+                            }
 
-                            Messages = Messages.Append(displayMessage).ToList();
+                            // Our own message: replace the optimistic copy added in SendMessageAsync.
+                            var pending = data.SenderId == CurrentUserId
+                                ? Messages.FirstOrDefault(m => m.Id == null && m.RoomId == data.RoomId && m.Content == data.Content)
+                                : null;
+
+                            if (pending != null)
+                            {
+                                pending.Id = data.Id;
+                                pending.CreatedAt = data.CreatedAt;
+                                pending.SendTo = data.SendTo;
+                            }
+                            else
+                            {
+                                Messages.Add(new MessageDTO
+                                {
+                                    Id = data.Id,
+                                    Username = data.Username,
+                                    Content = data.Content,
+                                    CreatedAt = data.CreatedAt,
+                                    SendTo = data.SendTo,
+                                    RoomId = data.RoomId,
+                                    SenderId = data.SenderId
+                                });
+                                RequestScrollToBottom(smooth: true);
+                            }
+
                             StateHasChanged();
-
-                            await Task.Delay(50);
-                            await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
                         });
                     });
                     
@@ -224,7 +276,6 @@
                 }
                 catch (Exception ex)
                 {
-                    // Don't rethrow: a Realtime failure shouldn't take down the whole page.
                     // Messages still load and send over the API; only live updates are lost.
                     Console.WriteLine($"Error in SetupRealtimeAsync: {ex.Message}");
                     Snackbar.Add("Live updates are unavailable right now. Refresh to see new messages.", Severity.Warning);
@@ -239,37 +290,42 @@
                 _isSending = true;
 
                 var messageText = NewMessage;
-                NewMessage = ""; 
+                NewMessage = "";
+
+                // Show the message straight away (Id == null marks it as not yet confirmed).
+                // The realtime insert handler swaps in the saved copy when it arrives.
+                var message = new MessageDTO
+                {
+                    Username = CurrentUser ?? "Anonymous",
+                    Content = messageText,
+                    CreatedAt = DateTime.UtcNow,
+                    SendTo = sendToId,
+                    RoomId = CurrentRoomId,
+                    SenderId = CurrentUserId
+                };
+                Messages.Add(message);
+                RequestScrollToBottom(smooth: true);
                 StateHasChanged();
-                await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
 
                 try
                 {
-                    var message = new MessageDTO
-                    {
-                        Username = CurrentUser ?? "Anonymous",
-                        Content = messageText,
-                        CreatedAt = DateTime.UtcNow,
-                        SendTo = sendToId,
-                        RoomId = CurrentRoomId,
-                        SenderId = CurrentUserId
-                    };
-
                     var client = ClientFactory.CreateClient("ChatAppAPI");
-                    
-                    client.DefaultRequestHeaders.Authorization = 
+
+                    client.DefaultRequestHeaders.Authorization =
                         new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
 
                     var request = await client.PostAsJsonAsync("/api/message", message);
 
                     if (request?.IsSuccessStatusCode != true)
                     {
+                        Messages.Remove(message);
                         NewMessage = messageText;
                         Snackbar.Add("Failed to send. Try again.", Severity.Error);
                     }
                 }
                 catch (Exception ex)
                 {
+                    Messages.Remove(message);
                     NewMessage = messageText;
                     Snackbar.Add("Connection error.", Severity.Error);
                     Console.WriteLine(ex.Message);
@@ -311,13 +367,25 @@
             }
             public async ValueTask DisposeAsync()
             {
-                try 
+                try
                 {
+                    _presenceTimer?.Stop();
+                    _presenceTimer?.Dispose();
+                    _presenceTimer = null;
+
                     if (_channel != null)
                     {
                         _channel.Unsubscribe();
                         SupabaseClient.Realtime.Remove(_channel);
                     }
+
+                    if (_presenceChannel != null)
+                    {
+                        _presenceChannel.Unsubscribe();
+                        SupabaseClient.Realtime.Remove(_presenceChannel);
+                    }
+
+                    _dotNetRef?.Dispose();
 
                     SupabaseClient.Realtime.Disconnect();
                 }
@@ -426,8 +494,10 @@
                 sendToId = targetUser.UserId;
                 SelectedPrivateUser = targetUser.UserId;
                 CurrentRoomId = $"private-{Math.Min(CurrentUserId, targetUser.UserId)}-{Math.Max(CurrentUserId, targetUser.UserId)}";
-                await SetupRealtimeAsync();
-                await LoadMessagesAsync();
+                // Re-subscribe in parallel so the messages don't wait for Supabase's subscribe ack.
+                var realtimeTask = SetupRealtimeAsync();
+                await LoadMessagesAsync(); // scrolls to bottom once rendered
+                await realtimeTask;
                 Console.WriteLine($"Opened private chat with {targetUser.UserId} {targetUser.Username} in room {CurrentRoomId}");
 
             }
@@ -440,11 +510,10 @@
             {
                 SelectedPrivateUser = 0;
                 CurrentRoomId = "public-messages";
-                await LoadMessagesAsync();
                 sendToId = 0;
-                await SetupRealtimeAsync();
-                await JSRuntime.InvokeVoidAsync("ScrollToBottom", "chat-container");
-
+                var realtimeTask = SetupRealtimeAsync();
+                await LoadMessagesAsync(); // scrolls to bottom once rendered
+                await realtimeTask;
             }
             [JSInvokable] 
             public void OnChatScroll(bool atTop) 

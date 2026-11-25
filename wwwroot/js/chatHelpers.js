@@ -10,12 +10,13 @@ window.chatHelpers = window.chatHelpers || {
         }
     },
 
-    ScrollToBottom: function (id) {
+    // smooth = false jumps straight to the bottom (used for first load / room switch).
+    ScrollToBottom: function (id, smooth) {
         var element = document.getElementById(id);
         if (element) {
             element.scrollTo({
                 top: element.scrollHeight,
-                behavior: 'smooth'
+                behavior: smooth === false ? 'auto' : 'smooth'
             });
         }
     },
